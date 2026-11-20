@@ -142,31 +142,25 @@ export function compatibilidade() {
   };
 }
 
-/* ---------- feed ---------- */
-/** Últimas atividades (nota, visto, review), da mais nova para a mais antiga. Por padrão só as do outro:
-    as próprias cada um vê no seu Diário. */
-export async function feed(limite = 14, soDoOutro = true) {
+/* ---------- atividade ---------- */
+/** Atividade do outro para o Início: só os FILMES que ele viu nos últimos `dias` dias (pelo diário dele), do mais
+    recente para o mais antigo, cada filme uma vez. O resto (séries, notas antigas, listas) fica no perfil dele. */
+export async function feed(dias = 7) {
   const b = nuvem.usuario() ? nuvem.banco() : null;
-  if (!b) return [];
-  let pedido = b.from('avaliacoes').select('user_id, tipo, tmdb_id, visto, nota, curtido, seguindo, review_em, atualizado_em');
-  if (soDoOutro) pedido = pedido.neq('user_id', nuvem.usuario().id);
-  const { data, error } = await pedido.order('atualizado_em', { ascending: false }).limit(limite);
+  const o = nuvem.outro();
+  if (!b || !o) return [];
+  const desde = new Date(Date.now() - dias * 864e5).toLocaleDateString('sv-SE', { timeZone: 'America/Sao_Paulo' });
+  const { data, error } = await b.from('diario').select('tipo, tmdb_id, data, nota, revisto').eq('user_id', o.id).eq('tipo', 'filme').gte('data', desde)
+    .order('data', { ascending: false }).order('id', { ascending: false }).limit(60);
   if (error) return [];
-  // comentários do outro em reviews (as suas ou as dele) entram na atividade, para você saber que há resposta
-  let comentou = [];
-  if (soDoOutro) {
-    const r = await b.from('comentarios_review').select('user_id, tipo, tmdb_id, criado_em').neq('user_id', nuvem.usuario().id).order('criado_em', { ascending: false }).limit(6);
-    const vistos = new Set();
-    comentou = (r.data || []).filter((c) => !vistos.has(k(c.tipo, c.tmdb_id)) && vistos.add(k(c.tipo, c.tmdb_id))).map((c) => ({ user_id: c.user_id, tipo: c.tipo, tmdb_id: c.tmdb_id, comentou: true, atualizado_em: c.criado_em }));
-  }
-  const tudo = [...data, ...comentou].sort((x, y) => String(y.atualizado_em).localeCompare(String(x.atualizado_em))).slice(0, limite);
-  const info = await dados.resumos(tudo);
-  return tudo.map((a) => {
-    const r = info.get(k(a.tipo, a.tmdb_id)) || {};
-    return { ...a, nota: a.nota == null ? null : Number(a.nota), eu: a.user_id === nuvem.usuario().id, nome: nuvem.pessoa(a.user_id)?.nome || '', titulo: r.titulo || 'Sem título', ano: r.ano, poster: r.poster || '' };
+  const vistos = new Set();
+  const linhas = data.filter((x) => !vistos.has(x.tmdb_id) && vistos.add(x.tmdb_id));
+  const info = await dados.resumos(linhas);
+  return linhas.map((x) => {
+    const r = info.get(k(x.tipo, x.tmdb_id)) || {};
+    return { tipo: x.tipo, tmdb_id: x.tmdb_id, data: x.data, nota: x.nota == null ? null : Number(x.nota), revisto: x.revisto, curtido: Boolean(dele.get(k(x.tipo, x.tmdb_id))?.curtido), nome: o.nome, titulo: r.titulo || 'Sem título', ano: r.ano, poster: r.poster || '' };
   });
 }
-
 // carrega quando alguém entra e sempre que os dados da pessoa são sincronizados (login, import)
 let quem = null;
 nuvem.aoMudar(() => {

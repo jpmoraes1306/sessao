@@ -175,10 +175,10 @@ export async function abrirOvo() {
     return `<div class="ovo-c" role="dialog" aria-modal="true" aria-label="Você achou o símbolo da vez">
       <div class="ovo-t"><span class="ovo-g">${s.svg}</span><div><h3>Você achou ${esc(s.nome)}</h3><p>${quem}</p></div></div>
       <div class="ovo-f">${[DAFOE, CAGE].map((p) => {
-        const lista = CENAS[p.id];
-        const [cena, filme] = lista[dia % lista.length];
-        return `<a href="#/pessoa/${p.id}"><div class="cena"><img src="${img(cena, 'w780')}" alt="${esc(p.nome)}" crossorigin="anonymous" onerror="this.src='${img(p.rosto, 'w342')}';this.onerror=null"></div>
-          <span><b>${esc(p.nome)}</b> em ${esc(filme)}</span></a>`;
+        // a foto cômica da rodada vem do depósito privado e entra em seguida (ver porAsFotos); o quadro já nasce no lugar
+        const [prefixo, total] = FOTOS[p.id];
+        const arquivo = `${prefixo}-${String((dia % total) + 1).padStart(2, '0')}.jpg`;
+        return `<a href="#/pessoa/${p.id}"><div class="cena" data-foto="${arquivo}" data-pessoa="${p.id}"></div><span><b>${esc(p.nome)}</b><i data-filme></i></span></a>`;
       }).join('')}</div>
       ${placar ? htmlPlacar(placar, 'Quem achou primeiro, placar') : ''}
       ${eu && o ? '<a class="btn on-star" href="#/frame/hoje">Jogar o frame desta rodada</a>' : ''}
@@ -187,7 +187,8 @@ export async function abrirOvo() {
   };
   let anotando = true;
   caixa.innerHTML = corpo();
-  const fechar = () => { caixa.remove(); window.removeEventListener('hashchange', fechar); };
+  porAsFotos(caixa, dia);
+  const fechar =() => { caixa.remove(); window.removeEventListener('hashchange', fechar); };
   caixa.addEventListener('click', (e) => { if (e.target === caixa || e.target.closest('a,[data-fechar]')) fechar(); });
   window.addEventListener('hashchange', fechar);
   document.body.append(caixa);
@@ -195,7 +196,68 @@ export async function abrirOvo() {
   anotando = false;
   marcarAchado();
   window.dispatchEvent(new Event('ovo:achado')); // o Perfil atualiza o cartão da caça ao símbolo
-  if (caixa.isConnected) caixa.innerHTML = corpo();
+  if (caixa.isConnected) {
+    // o texto e o placar são refeitos; as fotos que já estão na tela ficam (para não piscar nem buscar de novo)
+    const fotos = caixa.querySelector('.ovo-f');
+    caixa.innerHTML = corpo();
+    if (fotos) caixa.querySelector('.ovo-f').replaceWith(fotos);
+  }
+}
+
+/* ---------- as fotos cômicas do Dafoe e do Cage ---------- */
+// Ficam no depósito privado "cenas" do Supabase (só vocês dois leem), com os nomes dafoe-01.jpg, cage-01.jpg...
+// São poses e caretas escolhidas uma a uma em 20/11/2026: 30 do Dafoe e 24 do Cage, uma por rodada, em sequência.
+// Para pôr mais: subir o arquivo com o número seguinte no depósito e aumentar o total aqui. OLHAR a foto antes.
+const FOTOS = { [DAFOE.id]: ['dafoe', 30], [CAGE.id]: ['cage', 24] };
+const enderecos = new Map(); // arquivo -> { url, ate }
+/** Endereço temporário de uma foto do depósito ('' sem login, sem internet ou se a foto não existir). */
+async function fotoDe(arquivo) {
+  const guardado = enderecos.get(arquivo);
+  if (guardado && guardado.ate > Date.now()) return guardado.url;
+  const b = nuvem.usuario() ? nuvem.banco() : null;
+  if (!b?.storage) return '';
+  try {
+    const { data, error } = await b.storage.from('cenas').createSignedUrl(arquivo, 6 * 3600);
+    if (error || !data?.signedUrl) return '';
+    enderecos.set(arquivo, { url: data.signedUrl, ate: Date.now() + 5 * 3600e3 });
+    return data.signedUrl;
+  } catch { return ''; }
+}
+/** Põe em cada quadro a foto da rodada. Se o depósito não responder, entra uma cena de filme (lista CENAS). */
+function porAsFotos(caixa, n) {
+  for (const quadro of caixa.querySelectorAll('.cena[data-foto]')) {
+    const reserva = () => {
+      const lista = CENAS[quadro.dataset.pessoa] || [];
+      const [cena, filme] = lista[n % lista.length] || [];
+      if (!cena || !quadro.isConnected) return;
+      quadro.classList.remove('foto');
+      quadro.style.aspectRatio = '';
+      quadro.innerHTML = `<img src="${img(cena, 'w780')}" alt="" crossorigin="anonymous">`;
+      const legenda = quadro.parentNode.querySelector('[data-filme]');
+      if (legenda) legenda.textContent = ` em ${filme}`;
+    };
+    fotoDe(quadro.dataset.foto).then((url) => {
+      if (!quadro.isConnected) return;
+      if (!url) { reserva(); return; }
+      const frente = new Image();
+      frente.className = 'frente';
+      frente.alt = '';
+      frente.onerror = reserva;
+      frente.onload = () => {
+        if (!quadro.isConnected) return;
+        // a foto aparece inteira, sem cortar a pose: o quadro acompanha o formato dela, entre 16:10 e 16:9
+        // (mais alto que isso, o pop-up com as duas fotos não cabe na tela do celular sem rolar)
+        quadro.style.aspectRatio = String(Math.min(16 / 9, Math.max(1.6, frente.naturalWidth / frente.naturalHeight)));
+        const fundo = new Image();
+        fundo.className = 'fundo';
+        fundo.alt = '';
+        fundo.src = url;
+        quadro.classList.add('foto');
+        quadro.replaceChildren(fundo, frente);
+      };
+      frente.src = url;
+    });
+  }
 }
 
 // o símbolo funciona em qualquer tela
