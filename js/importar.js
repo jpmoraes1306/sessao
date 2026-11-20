@@ -119,9 +119,12 @@ export async function gravar(exp, escolhas, aoAvancar = () => {}, dono = null) {
 
   /* 6) listas (os rankings por diretor entram com a ordem) */
   let listasGravadas = 0;
+  // lista criada ou editada no app não é trocada pela do Letterboxd com o mesmo nome
+  const { data: doApp } = await b.from('listas').select('nome').eq('user_id', user).eq('origem', 'app');
+  const mexidasNoApp = new Set((doApp || []).map((l) => l.nome));
   for (const l of exp.listas) {
     const itens = l.itens.map((i) => ({ ...i, t: alvo(i.filme) })).filter((i) => i.t);
-    if (!itens.length) continue;
+    if (!itens.length || mexidasNoApp.has(l.nome.trim())) continue;
     const { data, error } = await b.from('listas').upsert({ user_id: user, nome: l.nome.trim(), descricao: l.descricao || '', ranqueada: l.ranqueada, origem: 'letterboxd' }, { onConflict: 'user_id,nome' }).select('id').single();
     if (error) throw new Error(error.message);
     await b.from('lista_itens').delete().eq('lista_id', data.id);

@@ -1,6 +1,6 @@
 // Partida do app e navegação.
 // Rotas (no #): /inicio /buscar /lista /diario /perfil são abas;
-// /filme/ID /serie/ID /pessoa/ID (e /reviews/filme-ID, /ranking/pessoa-ID, /frame/hoje) abrem por cima,
+// /filme/ID /serie/ID /pessoa/ID (e /reviews/filme-ID, /ranking/pessoa-ID, /editar/favoritos, /editar/lista-ID, /frame/hoje) abrem por cima,
 // na "ficha". O botão voltar do celular funciona.
 import { carregarChaves } from './config.js';
 import { $, $$, esc, esqueletoFicha, erroFicha, toast } from './ui.js';
@@ -16,6 +16,7 @@ import * as importar from './telas/importar.js';
 import * as calendario from './telas/calendario.js';
 import * as reviews from './telas/reviews.js';
 import * as ranking from './telas/ranking.js';
+import * as editar from './telas/editar.js';
 import * as frame from './telas/frame.js';
 import * as dados from './dados.js';
 import * as social from './social.js';
@@ -24,7 +25,7 @@ import * as nuvem from './nuvem.js';
 
 const ABAS = { inicio, buscar, lista, diario, perfil };
 const NOMES = { inicio: 'Início', buscar: 'Buscar', lista: 'Quero ver', diario: 'Diário', perfil: 'Perfil' };
-const FICHAS = { filme, serie, pessoa, importar, calendario, reviews, ranking, frame };
+const FICHAS = { filme, serie, pessoa, importar, calendario, reviews, ranking, editar, frame };
 
 const view = $('#view');
 const sheet = $('#sheet');
@@ -152,7 +153,26 @@ async function navegar() {
     view.onchange = null;
     ABAS[nome].render(view);
   }
-  window.scrollTo(0, vindoDeFicha ? rolagem.get(onde.hash) || 0 : 0);
+  voltarPara(vindoDeFicha ? rolagem.get(onde.hash) || 0 : 0);
+}
+
+// Volta a tela para o ponto em que a pessoa estava. As abas que buscam na conta (Diário, Quero ver, Perfil)
+// ainda estão vazias nesse instante, então tenta de novo por uns segundos, até o conteúdo chegar.
+// Para assim que a pessoa mexe na tela.
+let esperaRolagem = 0;
+function voltarPara(y) {
+  clearInterval(esperaRolagem);
+  window.scrollTo(0, y);
+  if (!y || window.scrollY >= y - 2) return;
+  const minhaVez = vez;
+  let tentativas = 0;
+  const parar = () => { clearInterval(esperaRolagem); window.removeEventListener('touchstart', parar); window.removeEventListener('wheel', parar); window.removeEventListener('keydown', parar); };
+  for (const evento of ['touchstart', 'wheel', 'keydown']) window.addEventListener(evento, parar, { passive: true });
+  esperaRolagem = setInterval(() => {
+    if (minhaVez !== vez || ++tentativas > 40) { parar(); return; }
+    window.scrollTo(0, y);
+    if (window.scrollY >= y - 2) parar();
+  }, 100);
 }
 
 // ações comuns a todas as fichas

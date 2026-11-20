@@ -176,10 +176,17 @@ export async function garantirResumo(meta) {
   const b = banco();
   if (b) await b.from('cache_titulos').upsert({ tipo: meta.tipo, tmdb_id: meta.id, resumo: resumoDe(meta) }, { onConflict: 'tipo,tmdb_id', ignoreDuplicates: true });
 }
+/** Guarda na conta o resumo completo de um título (o de `tmdb.resumo`). Com `trocar`, cobre um resumo incompleto que já esteja lá. */
+export async function guardarResumo(tipo, id, resumo, trocar = false) {
+  const b = banco();
+  if (!b) return false;
+  const { error } = await b.from('cache_titulos').upsert({ tipo, tmdb_id: id, resumo, buscado_em: new Date().toISOString() }, { onConflict: 'tipo,tmdb_id', ignoreDuplicates: !trocar });
+  return !error;
+}
 
 /* ---------- diário ---------- */
 /** Registra uma sessão (data e se foi revisto). Marca o título como visto se ainda não estava. */
-export async function registrarSessao(meta, data, revisto, juntosId = null) {
+export async function registrarSessao(meta, data, revisto) {
   conferirDono();
   const b = banco();
   if (!b) return false;
@@ -192,7 +199,7 @@ export async function registrarSessao(meta, data, revisto, juntosId = null) {
     b.from('cache_titulos').upsert({ tipo: meta.tipo, tmdb_id: meta.id, resumo: resumoDe(reg) }, { onConflict: 'tipo,tmdb_id', ignoreDuplicates: true }),
     b.from('avaliacoes').upsert({ ...chave, visto: true, nota: reg.nota ?? null, curtido: !!reg.curtido, seguindo: !!reg.seguindo, atualizado_em: reg.em }),
     b.from('quero_ver').delete().match({ ...chave, juntos: false }),
-    b.from('diario').upsert({ ...chave, data, nota: reg.nota ?? null, revisto: !!revisto, origem: 'app', ...(juntosId ? { juntos_id: juntosId } : {}) }, { onConflict: 'user_id,tipo,tmdb_id,data' }),
+    b.from('diario').upsert({ ...chave, data, nota: reg.nota ?? null, revisto: !!revisto, origem: 'app' }, { onConflict: 'user_id,tipo,tmdb_id,data' }),
   ]);
   return !r.some((x) => x.error);
 }
@@ -251,14 +258,25 @@ export function alternarFavorito(meta) {
     if (lista.length >= 4) return false;
     lista.push({ tipo: meta.tipo, id: meta.id, titulo: meta.titulo, ano: meta.ano, poster: meta.poster });
   }
+  gravarFavoritos(lista, [meta]);
+  return true;
+}
+/** Troca a lista inteira de favoritos, na ordem dada (até 4). Usado pela tela que reordena. */
+export function definirFavoritos(lista) {
+  conferirDono();
+  const limpa = [];
+  for (const f of lista) if (limpa.length < 4 && !limpa.some((x) => x.tipo === f.tipo && x.id === f.id)) limpa.push({ tipo: f.tipo, id: f.id, titulo: f.titulo, ano: f.ano ?? null, poster: f.poster || '' });
+  gravarFavoritos(limpa, limpa);
+}
+function gravarFavoritos(lista, metas) {
   d.favoritos = lista;
   salvar();
   naConta(['favoritos', 'favs'], async (b, user) => {
-    await garantirResumo(meta);
-    await b.from('favoritos').delete().eq('user_id', user);
-    return lista.length ? b.from('favoritos').insert(lista.map((f, i) => ({ user_id: user, posicao: i + 1, tipo: f.tipo, tmdb_id: f.id }))) : null;
+    for (const m of metas) await garantirResumo(m); // o outro precisa do título e do pôster para ver no seu perfil
+    const apagou = await b.from('favoritos').delete().eq('user_id', user);
+    if (apagou.error || !lista.length) return apagou;
+    return b.from('favoritos').insert(lista.map((f, i) => ({ user_id: user, posicao: i + 1, tipo: f.tipo, tmdb_id: f.id })));
   });
-  return true;
 }
 
 /* ---------- episódios ---------- */
@@ -391,12 +409,14 @@ export function sincronizar() {
         if (d.dono === null) await subirLocal(b, user); // marcado antes do login: vai para a conta
         else d = { dono: null, titulos: {}, series: {}, favoritos: [], pendentes: {} }; // outra pessoa usou este aparelho: começa limpo
       }
-      const [av, quero, eps, temps, favs] = await Promise.all([
+      const [av, quero, eps, temps, favs, deHoje] = await Promise.all([
         lerTudo(() => b.from('avaliacoes').select('tipo, tmdb_id, visto, nota, curtido, seguindo, review, spoiler, review_em, atualizado_em').eq('user_id', user).order('tmdb_id')),
         lerTudo(() => b.from('quero_ver').select('tipo, tmdb_id, adicionado_em').eq('user_id', user).eq('juntos', false).order('tmdb_id')),
         lerTudo(() => b.from('episodios_vistos').select('serie_id, temporada, episodio, data, nota, vezes').eq('user_id', user).order('serie_id')),
         lerTudo(() => b.from('notas_temporada').select('serie_id, temporada, nota').eq('user_id', user).order('serie_id')),
         lerTudo(() => b.from('favoritos').select('posicao, tipo, tmdb_id').eq('user_id', user).order('posicao')),
+        // as sessões de hoje no diário dizem, em qualquer aparelho, se o título foi visto (ou visto de novo) hoje
+        lerTudo(() => b.from('diario').select('tipo, tmdb_id, revisto').eq('user_id', user).eq('data', hoje()).order('id')),
       ]);
       const info = await resumos([...av, ...quero, ...favs]);
       const novo = { dono: user, titulos: {}, series: {}, favoritos: [], pendentes: {} };
@@ -410,6 +430,10 @@ export function sincronizar() {
       };
       for (const a of av) {
         Object.assign(base(a.tipo, a.tmdb_id), { visto: a.visto, nota: a.nota == null ? null : Number(a.nota), curtido: a.curtido, seguindo: a.seguindo, review: a.review || null, spoiler: a.spoiler, reviewEm: a.review_em, em: a.atualizado_em, vistoEm: d.titulos[chaveDe(a.tipo, a.tmdb_id)]?.vistoEm, revistoEm: d.titulos[chaveDe(a.tipo, a.tmdb_id)]?.revistoEm });
+      }
+      for (const s of deHoje) {
+        const t = novo.titulos[chaveDe(s.tipo, s.tmdb_id)];
+        if (t) t[s.revisto ? 'revistoEm' : 'vistoEm'] = hoje();
       }
       for (const q of quero) Object.assign(base(q.tipo, q.tmdb_id), { quero: true, queroEm: q.adicionado_em });
       novo.favoritos = favs.map((f) => { const r = info.get(chaveDe(f.tipo, f.tmdb_id)) || {}; return { tipo: f.tipo, id: f.tmdb_id, titulo: r.titulo || '', ano: r.ano ?? null, poster: r.poster || '' }; });

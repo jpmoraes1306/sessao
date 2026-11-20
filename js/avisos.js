@@ -1,5 +1,5 @@
 // Avisos (notificações push) deste aparelho: episódio novo das séries acompanhadas, estreia
-// marcada com "Avisar" e a sessão do dia. Quem manda é a função "avisos" no Supabase.
+// marcada com "Avisar" e o símbolo do dia achado pelo outro. Quem manda é a função "avisos" no Supabase.
 // No iPhone só funciona com o app instalado na tela de início (iOS 16.4 ou mais novo).
 import * as nuvem from './nuvem.js';
 
@@ -26,7 +26,19 @@ async function inscricao() {
 export async function estado() {
   if (!suportado()) return 'sem-suporte';
   if (Notification.permission === 'denied') return 'bloqueado';
-  try { return (await inscricao()) ? 'ligado' : 'desligado'; } catch { return 'desligado'; }
+  try {
+    const sub = await inscricao();
+    if (!sub) return 'desligado';
+    // O navegador está inscrito, mas a conta pode não ter a inscrição (gravação que falhou, ou outra conta
+    // entrou neste aparelho): grava de novo, para "ligado" querer dizer que o aviso chega mesmo.
+    const eu = nuvem.usuario()?.id;
+    if (eu) {
+      const j = sub.toJSON();
+      const { error } = await nuvem.banco().from('push_inscricoes').upsert({ endpoint: j.endpoint, chaves: j.keys, user_id: eu });
+      if (error) console.warn('avisos: a inscrição deste aparelho não está na conta:', error.message);
+    }
+    return 'ligado';
+  } catch { return 'desligado'; }
 }
 
 /** Pede a permissão, inscreve o aparelho e guarda a inscrição na conta. Devolve '' ou o texto do problema. */

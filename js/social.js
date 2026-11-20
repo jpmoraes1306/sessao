@@ -6,7 +6,6 @@ import * as dados from './dados.js';
 let dele = new Map();        // "filme:123" -> { visto, nota, curtido, seguindo, temReview, em }
 let queroDele = new Map();   // "filme:123" -> data em que ele adicionou
 let juntos = new Map();      // "filme:123" -> { por, em }
-let sessoes = [];           // sessões "juntos" planejadas ou vistas (não canceladas)
 let carregado = false;
 const ouvintes = new Set();
 export const aoCarregar = (fn) => { ouvintes.add(fn); return () => ouvintes.delete(fn); };
@@ -27,16 +26,14 @@ async function lerTudo(consulta) {
 /** Carrega o que é do outro e a lista "juntos". Chamado no login e depois de um import. */
 export async function carregar() {
   const b = nuvem.usuario() ? nuvem.banco() : null;
-  if (!b) { dele = new Map(); queroDele = new Map(); juntos = new Map(); sessoes = []; carregado = false; return; }
+  if (!b) { dele = new Map(); queroDele = new Map(); juntos = new Map(); carregado = false; return; }
   const o = nuvem.outro();
   try {
-    const [av, quero, jun, ses] = await Promise.all([
+    const [av, quero, jun] = await Promise.all([
       o ? lerTudo(() => b.from('avaliacoes').select('tipo, tmdb_id, visto, nota, curtido, seguindo, review_em, atualizado_em').eq('user_id', o.id).order('tmdb_id')) : [],
       o ? lerTudo(() => b.from('quero_ver').select('tipo, tmdb_id, adicionado_em').eq('user_id', o.id).eq('juntos', false).order('tmdb_id')) : [],
       lerTudo(() => b.from('quero_ver').select('tipo, tmdb_id, user_id, adicionado_em').eq('juntos', true).order('tmdb_id')),
-      lerTudo(() => b.from('sessoes_juntos').select('id, tipo, tmdb_id, data, situacao, criado_por, visto_por').neq('situacao', 'cancelada').order('data')),
     ]);
-    sessoes = ses;
     dele = new Map(av.map((a) => [k(a.tipo, a.tmdb_id), { visto: a.visto, nota: a.nota == null ? null : Number(a.nota), curtido: a.curtido, seguindo: a.seguindo, temReview: Boolean(a.review_em), em: a.atualizado_em }]));
     queroDele = new Map(quero.map((q) => [k(q.tipo, q.tmdb_id), q.adicionado_em]));
     juntos = new Map(jun.map((j) => [k(j.tipo, j.tmdb_id), { por: j.user_id, em: j.adicionado_em }]));
@@ -77,49 +74,6 @@ export async function marcarJuntos(meta, sim) {
     await b.from('quero_ver').delete().match({ tipo: meta.tipo, tmdb_id: meta.id, juntos: true });
   }
   return true;
-}
-
-/* ---------- sessões juntos (regra da terça) ---------- */
-const hojeISO = () => new Date().toLocaleDateString('sv-SE');
-/** Sessões marcadas (não canceladas). Cada uma: { id, tipo, tmdb_id, data, situacao, criado_por, visto_por }. */
-export const sessoesJuntos = () => sessoes;
-/** A sessão em aberto deste título (planejada, ou vista por um e ainda sem a confirmação do outro). */
-export function sessaoDe(tipo, id) {
-  const eu = nuvem.usuario()?.id;
-  return sessoes.find((x) => x.tipo === tipo && x.tmdb_id === id && (x.situacao === 'planejada' || !(x.visto_por || []).includes(eu))) || null;
-}
-/** O que cada sessão pede de você agora: 'futura', 'hoje-ou-passou' (dá para marcar "vimos") ou 'confirmar' (o outro já marcou). */
-export function estadoDaSessao(x) {
-  const eu = nuvem.usuario()?.id;
-  if (x.situacao === 'vista') return (x.visto_por || []).includes(eu) ? 'feita' : 'confirmar';
-  return x.data > hojeISO() ? 'futura' : 'hoje-ou-passou';
-}
-
-export async function marcarSessao(meta, data) {
-  const b = nuvem.banco();
-  if (!b) return false;
-  await dados.garantirResumo(meta);
-  const { data: linha, error } = await b.from('sessoes_juntos').insert({ tipo: meta.tipo, tmdb_id: meta.id, data }).select().single();
-  if (error) return false;
-  sessoes = [...sessoes, linha].sort((x, y) => x.data.localeCompare(y.data));
-  return true;
-}
-
-export async function cancelarSessao(id) {
-  const { error } = await nuvem.banco().from('sessoes_juntos').update({ situacao: 'cancelada' }).eq('id', id);
-  if (!error) sessoes = sessoes.filter((x) => x.id !== id);
-  return !error;
-}
-
-/** "Vimos juntos": entra no seu diário na data da sessão; o outro só confirma com um toque. */
-export async function vimosJuntos(x, meta) {
-  const eu = nuvem.usuario()?.id;
-  const vistoPor = [...new Set([...(x.visto_por || []), eu])];
-  const { error } = await nuvem.banco().from('sessoes_juntos').update({ situacao: 'vista', visto_por: vistoPor }).eq('id', x.id);
-  if (error) return false;
-  x.situacao = 'vista';
-  x.visto_por = vistoPor;
-  return dados.registrarSessao(meta, x.data > hojeISO() ? hojeISO() : x.data, false, x.id);
 }
 
 /* ---------- reviews ---------- */
