@@ -2,7 +2,7 @@
    - Arquivos do app: rede primeiro, cache como reserva (abre sem internet e nunca fica preso em versão velha).
    - Imagens do TMDB e fontes: cache primeiro.
    - APIs (TMDB, OMDb): passam direto; o cache delas é feito pelo próprio app (IndexedDB). */
-const VERSAO = 'v19';
+const VERSAO = 'v20';
 const CACHE_APP = `sessao-app-${VERSAO}`;
 const CACHE_IMG = 'sessao-img-v1';
 const CACHE_FONTE = 'sessao-fonte-v1';
