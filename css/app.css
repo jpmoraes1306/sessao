@@ -15,7 +15,6 @@
   --r:14px;
   --ge:max(16px,env(safe-area-inset-left,0px)); --gd:max(16px,env(safe-area-inset-right,0px));
 }
-body.tema-dafoe{ --star:#9be15d; --seen:#9be15d; --list:#9be15d; --bg:#0b100c; --surface:#151d17; --raised:#1f2b22; }
 *{box-sizing:border-box}
 html,body{height:100%}
 html{-webkit-text-size-adjust:100%}
@@ -423,3 +422,19 @@ h2 small .link{font-size:15px}
 .wiki{gap:10px;padding-bottom:12px}
 .wiki p{margin:0;font-size:15px;line-height:1.55;color:var(--fg)}
 .wiki h4{margin:6px 0 0;font-size:15px;font-weight:700;color:var(--fg)}
+
+/* ajustes de 20/11: revisto como ícone, miniatura com foto, notas sem valor, seção "Avançado" */
+.grid4 .tag{display:none}
+.fim{display:inline-flex;align-items:center;gap:7px;justify-content:flex-end}
+.rev{display:inline-grid;place-items:center;color:var(--muted)}
+.rev svg{width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+img.av{object-fit:cover;background:var(--raised)}
+.nf.sem{color:var(--faint)}
+.nf.sem .m{opacity:.45}
+.avancado summary{list-style:none;display:flex;align-items:center;justify-content:space-between;gap:12px;background:var(--surface);border-radius:var(--r);padding:12px 14px;cursor:pointer;font-weight:500}
+.avancado summary::-webkit-details-marker{display:none}
+.avancado summary small{display:block;font-size:12.5px;font-weight:400;color:var(--muted)}
+.avancado summary .vai{transition:transform .2s}
+.avancado[open] summary .vai{transform:rotate(180deg)}
+.avancado>section{margin-top:18px}
+.avancado h2{font-size:16px}
