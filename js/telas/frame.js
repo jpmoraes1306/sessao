@@ -1,18 +1,18 @@
 // Frame do dia: um quadro bem de perto de um filme que VOCÊS DOIS já viram. Três chances; a cada erro a
-// imagem abre mais e vem uma dica. O quadro do dia fica gravado na conta (quem abre primeiro sorteia), então
-// é o mesmo para os dois. Rota: #/frame/hoje.
+// imagem abre mais e vem uma dica. Há um quadro por rodada (troca à meia-noite e ao meio-dia de Brasília);
+// ele fica gravado na conta (quem abre primeiro sorteia), então é o mesmo para os dois. Rota: #/frame/hoje.
+// O quadro é uma cena de verdade: sai dos clipes e trailers oficiais do filme (ver quadrosDoFilme em tmdb.js).
 import * as tmdb from '../tmdb.js';
 import * as dados from '../dados.js';
 import * as nuvem from '../nuvem.js';
 import * as social from '../social.js';
-import { $, esc, hoje, toast } from '../ui.js';
+import { $, esc, rodada, numeroDaRodada, proximaTroca, toast } from '../ui.js';
 import { img } from '../tmdb.js';
 
 const ZOOM = [3.4, 2.1, 1.35]; // quanto a imagem fica ampliada na 1ª, 2ª e 3ª tentativa
 const MINIMO = 8;              // filmes em comum para o jogo fazer sentido
-const LOCAL = 'sessao:frame';  // tentativas erradas de hoje, para não zerar ao sair e voltar
+const LOCAL = 'sessao:frame';  // tentativas erradas desta rodada, para não zerar ao sair e voltar
 
-const numeroDoDia = (iso) => Math.floor(Date.parse(`${iso}T12:00:00Z`) / 864e5);
 const sorteio = (n, sal) => (Math.imul(n + sal, 2654435761) >>> 8);
 /** Embaralha sempre do mesmo jeito para o mesmo dia. */
 const embaralhar = (lista, dia, chave = (x) => x.id) => [...lista].sort((a, b) => sorteio(chave(a), dia) - sorteio(chave(b), dia));
@@ -22,7 +22,50 @@ const aviso = (titulo, texto) => `<div class="backdrop curto" style="--a:#5c4a2a
   <div class="wrap" style="gap:18px"><div class="pessoa-topo" style="margin-top:-40px"><div><div class="eyebrow">Easter egg</div><h1>Frame do dia</h1></div></div>
   <div class="vazio"><b>${titulo}</b>${texto}</div></div>`;
 
-/** Sorteia o quadro de hoje entre os filmes que os dois viram e grava na conta. Devolve a linha gravada (a de quem chegou primeiro). */
+const DO_YOUTUBE = /^https:\/\/i\.ytimg\.com\/vi\/[\w-]{6,20}\/maxres[123]\.jpg$/;
+/** Endereço da imagem do quadro: ou um quadro de vídeo (endereço inteiro), ou um caminho de imagem do TMDB. */
+const enderecoDe = (imagem, tam = 'w1280') => (DO_YOUTUBE.test(imagem) ? imagem : /^\/[\w.]+$/.test(imagem) ? img(imagem, tam) : '');
+
+/** A imagem serve para o jogo? Tem de existir em tamanho grande e não ser tela escura, lisa ou só com letreiro
+    (abertura de estúdio, cartela de texto, corte para o preto). Olha só o miolo: trailer de filme largo vem com
+    faixas pretas em cima e embaixo. */
+async function quadroServe(url) {
+  if (!url) return false;
+  try {
+    const foto = new Image();
+    foto.crossOrigin = 'anonymous';
+    await new Promise((ok, erro) => { foto.onload = ok; foto.onerror = erro; foto.src = url; });
+    if (foto.naturalWidth < 280) return false; // o YouTube devolve uma miniatura cinza de 120 px quando o quadro grande não existe
+    const L = 64; const A = 36;
+    const tela = document.createElement('canvas');
+    tela.width = L; tela.height = A;
+    const c = tela.getContext('2d', { willReadFrequently: true });
+    c.drawImage(foto, 0, 0, L, A);
+    const px = c.getImageData(0, Math.round(A * 0.2), L, Math.round(A * 0.6)).data;
+    const total = px.length / 4;
+    let escuros = 0; let soma = 0; let soma2 = 0;
+    for (let i = 0; i < px.length; i += 4) {
+      const y = 0.299 * px[i] + 0.587 * px[i + 1] + 0.114 * px[i + 2];
+      if (y < 28) escuros++;
+      soma += y; soma2 += y * y;
+    }
+    const media = soma / total;
+    const variacao = Math.sqrt(Math.max(0, soma2 / total - media * media));
+    return escuros / total < 0.55 && variacao > 18;
+  } catch { return false; }
+}
+
+/** Escolhe o quadro de um filme: primeiro uma cena de clipe ou trailer; sem vídeo, uma imagem do TMDB que não seja pôster. */
+async function escolherQuadro(id, n) {
+  const deVideo = await tmdb.quadrosDoFilme(id).catch(() => []);
+  for (const url of deVideo.slice(0, 9)) if (await quadroServe(url)) return url;
+  const doTmdb = (await tmdb.cenasDoFilme(id).catch(() => [])).slice(0, 8);
+  const comeco = doTmdb.length ? n % doTmdb.length : 0;
+  for (const caminho of [...doTmdb.slice(comeco), ...doTmdb.slice(0, comeco)]) if (await quadroServe(img(caminho, 'w300'))) return caminho;
+  return '';
+}
+
+/** Sorteia o quadro desta rodada entre os filmes que os dois viram e grava na conta. Devolve a linha gravada (a de quem chegou primeiro). */
 async function sortear(b, dia) {
   if (!social.pronto()) await social.carregar();
   if (!social.pronto()) throw new Error('sem os dados do outro');
@@ -34,12 +77,12 @@ async function sortear(b, dia) {
   const desde = new Date(Date.now() - 60 * 864e5).toLocaleDateString('sv-SE');
   const { data: recentes } = await b.from('frame_dia').select('tmdb_id').gte('dia', desde);
   const usados = new Set((recentes || []).map((r) => r.tmdb_id));
-  const n = numeroDoDia(dia);
+  const n = numeroDaRodada(dia);
   const livres = filmes.filter((f) => !usados.has(f.id));
   const fila = embaralhar(livres.length >= MINIMO ? livres : filmes, n);
   for (const certo of fila.slice(0, 12)) {
-    const cenas = await tmdb.cenasDoFilme(certo.id).catch(() => []);
-    if (cenas.length < 2) continue;
+    const imagem = await escolherQuadro(certo.id, n);
+    if (!imagem) continue;
     // opções erradas: da mesma época quando dá, sem franquia repetida (dois "Harry Potter" entregam a resposta)
     const erradas = [];
     const perto = embaralhar(filmes.filter((f) => f.id !== certo.id && Math.abs((f.ano || 0) - (certo.ano || 0)) <= 10), n + 1);
@@ -51,8 +94,8 @@ async function sortear(b, dia) {
     }
     if (erradas.length < 3) continue;
     const linha = {
-      dia, tmdb_id: certo.id, imagem: cenas[sorteio(n, 3) % Math.min(cenas.length, 8)],
-      foco: `${30 + (sorteio(n, 5) % 41)}% ${30 + (sorteio(n, 9) % 31)}%`,
+      dia, tmdb_id: certo.id, imagem,
+      foco: `${30 + (sorteio(n, 5) % 41)}% ${36 + (sorteio(n, 9) % 25)}%`,
       opcoes: [certo, ...erradas].sort((a, c) => a.titulo.localeCompare(c.titulo)),
     };
     await b.from('frame_dia').upsert(linha, { onConflict: 'dia', ignoreDuplicates: true });
@@ -67,13 +110,13 @@ export async function abrir(el, _id, ctx) {
   const o = u ? nuvem.outro() : null;
   if (!u || !o) { el.innerHTML = aviso('É um jogo para os dois', 'Entre na sua conta para jogar. O quadro sai dos filmes que você e o outro já viram.<div class="actions"><a class="btn small" href="#/perfil">Abrir o Perfil</a></div>'); return; }
   const b = nuvem.banco();
-  const dia = hoje();
+  const dia = rodada(); // a chave da rodada: o dia de manhã, o dia com "b" da tarde em diante
   let F; let jogadas; let mes;
   try {
     const { data } = await b.from('frame_dia').select('*').eq('dia', dia).maybeSingle();
     F = data || await sortear(b, dia);
     if (!ctx.vivo()) return;
-    if (F.poucos != null) { el.innerHTML = aviso('Ainda faltam filmes em comum', `O jogo usa só filmes que os dois já viram, e precisa de pelo menos ${MINIMO} com cena no TMDB.`); return; }
+    if (F.poucos != null) { el.innerHTML = aviso('Ainda faltam filmes em comum', `O jogo usa só filmes que os dois já viram, e precisa de pelo menos ${MINIMO} com cena disponível.`); return; }
     const { data: linhas, error } = await b.from('frame_jogadas').select('dia, user_id, tentativas, acertou').gte('dia', `${dia.slice(0, 7)}-01`);
     if (error) throw error;
     mes = linhas || [];
@@ -122,18 +165,18 @@ export async function abrir(el, _id, ctx) {
     const dele = jogadas.find((j) => j.user_id === o.id);
     const pontos = (id) => mes.filter((j) => j.user_id === id && j.acertou).length;
     const [eu, ele] = [pontos(u.id), pontos(o.id)];
-    const nomeMes = new Date(`${dia}T12:00:00`).toLocaleDateString('pt-BR', { month: 'long' });
+    const nomeMes = new Date(`${dia.slice(0, 10)}T12:00:00`).toLocaleDateString('pt-BR', { month: 'long' });
     el.innerHTML = `<div class="backdrop curto" style="--a:#5c4a2a;--b:#101419"></div><button class="back" data-acao="voltar" aria-label="Voltar">‹</button>
     <div class="wrap" style="gap:16px"><div class="pessoa-topo" style="margin-top:-40px"><div><div class="eyebrow">Easter egg</div><h1>Frame do dia</h1></div></div>
       <p class="sub2" style="display:block">De que filme é este quadro? É um dos que você e ${esc(o.nome)} já viram. São 3 chances, e a cada erro a imagem abre mais.</p>
-      <div class="frame"><img src="${esc(img(F.imagem, 'w1280'))}" alt="Quadro de um filme para adivinhar" crossorigin="anonymous" draggable="false" style="transform:scale(${fim ? 1 : ZOOM[n]});transform-origin:${esc(F.foco)}">
+      <div class="frame"><img src="${esc(enderecoDe(F.imagem))}" alt="Quadro de um filme para adivinhar" crossorigin="anonymous" draggable="false" style="transform:scale(${fim ? 1 : ZOOM[n]});transform-origin:${esc(F.foco)}">
         <span class="conta">${fim ? (minha.acertou ? `Acertou na ${minha.tentativas}ª` : 'Não foi dessa vez') : `Tentativa ${n + 1} de 3`}</span></div>
       <p class="dica" aria-live="polite">${dica}</p>
       <div class="grupo">${F.opcoes.map((x) => `<button class="lin op${fim && x.id === certo.id ? ' certa' : ''}" data-op="${Number(x.id)}" ${fim || erradas.includes(x.id) ? 'disabled' : ''}><span class="n">${esc(x.titulo)}</span></button>`).join('')}</div>
       ${fim ? `<section><h2>Placar <small>acertos em ${nomeMes}</small></h2>
         <div class="placar"><div class="${eu > ele ? 'lider' : ''}"><b>${eu}</b>você</div><span>${nomeMes}</span><div class="${ele > eu ? 'lider' : ''}"><b>${ele}</b>${esc(o.nome)}</div></div>
-        <div class="grupo"><div class="lin"><span class="n">Hoje<small>${resultado(minha, 'Você')} · ${esc(resultado(dele, o.nome))}</small></span></div></div></section>
-        <p class="note">Amanhã tem outro quadro. O jogo só usa filmes que os dois já viram.</p>` : ''}
+        <div class="grupo"><div class="lin"><span class="n">Nesta rodada<small>${resultado(minha, 'Você')} · ${esc(resultado(dele, o.nome))}</small></span></div></div></section>
+        <p class="note">O próximo quadro sai ${proximaTroca()}. O jogo só usa filmes que os dois já viram.</p>` : ''}
     </div>`;
     const foto = $('.frame img', el);
     if (antes && foto) {

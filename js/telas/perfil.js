@@ -182,10 +182,10 @@ function cartaoOvo() {
   const s = ovo.simboloDeHoje();
   const achei = ovo.acheiHoje();
   const placar = ovo.placarDoMes();
-  return `<p class="ovo-hoje"><span class="ovo-m">${s.svg}</span><span>Hoje o símbolo escondido é <b>${esc(s.nome)}</b>. ${achei ? `Você já achou${typeof achei === 'string' ? ` às ${achei}` : ''}.` : 'Está em algum lugar do app, e quem achar primeiro ganha o dia.'}</span></p>
+  return `<p class="ovo-hoje"><span class="ovo-m">${s.svg}</span><span>Agora o símbolo escondido é <b>${esc(s.nome)}</b>. ${achei ? `Você já achou${typeof achei === 'string' ? ` às ${achei}` : ''}.` : 'Está em algum lugar do app, e quem achar primeiro ganha a rodada.'}</span></p>
     ${placar ? ovo.htmlPlacar(placar, 'Quem achou primeiro, placar') : ''}
-    ${achei ? (placar ? '<div class="actions"><a class="btn small on-star" href="#/frame/hoje">Jogar o frame do dia</a></div>' : '') : '<div class="actions"><button class="btn small" data-acao="dica">Me dá uma dica do lugar</button></div>'}
-    <p class="note">Muda todo dia à meia-noite. Achar o símbolo mostra o Dafoe e o Cage do dia e libera o frame do dia.</p>`;
+    ${achei ? (placar ? '<div class="actions"><a class="btn small on-star" href="#/frame/hoje">Jogar o frame desta rodada</a></div>' : '') : '<div class="actions"><button class="btn small" data-acao="dica">Me dá uma dica do lugar</button></div>'}
+    <p class="note">Troca duas vezes por dia, ao meio-dia e à meia-noite (a próxima troca é ${ovo.proximaTroca()}). Achar o símbolo mostra o Dafoe e o Cage da vez e libera o frame.</p>`;
 }
 
 // achou o símbolo com o Perfil aberto por baixo: o cartão passa a dizer "você já achou" na hora
@@ -391,7 +391,7 @@ function ligar(el) {
       try { const n = await avisos.testar(); toast(n ? 'Aviso de teste enviado' : 'Nenhum aparelho recebeu. Desligue e ative de novo.'); } catch { toast('Não deu para mandar o teste'); }
       b.disabled = false;
     } else if (acao === 'dica') {
-      b.outerHTML = `<p style="color:var(--fg)">Hoje está ${ovo.dicaDeHoje()}.</p>`;
+      b.outerHTML = `<p style="color:var(--fg)">Agora está ${ovo.dicaDeHoje()}.</p>`;
     } else if (acao === 'limpar-cache') {
       await limparCache();
       toast('Cache limpo');
