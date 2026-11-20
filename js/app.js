@@ -3,7 +3,7 @@
 // /filme/ID /serie/ID /pessoa/ID (e /reviews/filme-ID, /ranking/pessoa-ID, /frame/hoje) abrem por cima,
 // na "ficha". O botão voltar do celular funciona.
 import { carregarChaves } from './config.js';
-import { $, $$, esqueletoFicha, erroFicha } from './ui.js';
+import { $, $$, esc, esqueletoFicha, erroFicha, toast } from './ui.js';
 import * as inicio from './telas/inicio.js';
 import * as buscar from './telas/buscar.js';
 import * as lista from './telas/lista.js';
@@ -40,7 +40,62 @@ function rota() {
   return { nome, id };
 }
 
+/* ---------- tela de entrada: sem login o app não abre (só o computador de teste tem a opção de seguir sem conta) ---------- */
+const entrada = $('#entrada');
+const COMPUTADOR_DE_TESTE = ['localhost', '127.0.0.1', '[::1]'].includes(location.hostname);
+const voltandoDoGoogle = new URLSearchParams(location.search).has('code');
+let semConta = false;
+try { semConta = COMPUTADOR_DE_TESTE && sessionStorage.getItem('sessao:sem-conta') === '1'; } catch { /* sem armazenamento */ }
+/** Este aparelho tem um login guardado? Dá para saber na hora, antes de falar com o servidor. */
+const temLoginGuardado = () => { try { return Object.keys(localStorage).some((k) => /^sb-.+-auth-token$/.test(k)); } catch { return false; } };
+function precisaEntrar() {
+  if (nuvem.usuario() || semConta) return false;
+  if (!nuvem.iniciou()) return !temLoginGuardado();
+  // sem internet e com login guardado: abre com o que está no aparelho
+  return nuvem.disponivel() || !temLoginGuardado();
+}
+let ligando = null; // a conferência do login guardado, para o botão esperar por ela
+/** Mostra ou esconde a tela de entrada conforme o login. Devolve true quando o app está aberto. */
+function porteiro() {
+  if (!precisaEntrar()) {
+    if (!entrada.hidden) { entrada.hidden = true; entrada.innerHTML = ''; document.body.classList.remove('fechado'); }
+    return true;
+  }
+  const erro = nuvem.erroDeLogin();
+  const entrando = voltandoDoGoogle && !nuvem.iniciou();
+  entrada.innerHTML = `<div class="entrada-c">
+    <img src="icones/icon-192.png" alt="" width="84" height="84">
+    <h1>Sessão</h1>
+    <p class="lema">O diário de filmes e séries de vocês dois.</p>
+    ${erro ? `<p class="erro" role="alert">${esc(erro)} Tente com a outra conta Google.</p>` : ''}
+    <button class="btn on-seen" data-entrada="google" ${entrando ? 'disabled' : ''}>${entrando ? 'Entrando…' : 'Entrar com o Google'}</button>
+    <p class="note">Só as contas Google cadastradas entram. O app não pede nem guarda senha.</p>
+    ${COMPUTADOR_DE_TESTE ? '<button class="texto" data-entrada="sem-conta">Continuar sem conta (só neste computador de teste)</button>' : ''}
+  </div>`;
+  if (entrada.hidden) {
+    entrada.hidden = false;
+    document.body.classList.add('fechado');
+    document.body.style.overflow = '';
+    window.scrollTo(0, 0);
+  }
+  return false;
+}
+entrada.onclick = async (e) => {
+  const b = e.target.closest('button[data-entrada]');
+  if (!b) return;
+  if (b.dataset.entrada === 'sem-conta') {
+    semConta = true;
+    try { sessionStorage.setItem('sessao:sem-conta', '1'); } catch { /* vale só nesta visita */ }
+    if (porteiro()) navegar();
+    return;
+  }
+  b.disabled = true;
+  b.textContent = 'Abrindo o Google…';
+  try { await ligando; await nuvem.entrar(); } catch { b.disabled = false; b.textContent = 'Entrar com o Google'; toast('Não deu para abrir o login. Confira a internet.'); }
+};
+
 async function navegar() {
+  if (!entrada.hidden) return; // a tela de entrada está na frente; ao entrar, o app abre na rota pedida
   const r = rota();
   const hash = location.hash || '#/inicio';
   if (onde) rolagem.set(onde.hash, onde.tipo === 'ficha' ? sheet.scrollTop : window.scrollY);
@@ -142,6 +197,8 @@ nuvem.aoMudar(() => {
   const quemE = nuvem.usuario()?.id || null;
   const trocou = quemE !== quemEra;
   quemEra = quemE;
+  if (!porteiro()) return;
+  if (!onde) { if (pronto) navegar(); return; } // acabou de entrar pela tela de entrada: abre o app
   // refaz a tela aberta se alguém entrou ou saiu; o Perfil sempre, porque mostra o estado do login
   if (onde?.tipo === 'aba' && (trocou || abaNaTela === 'perfil')) { abaNaTela = null; navegar(); }
   else if (onde?.tipo === 'ficha' && trocou && pronto) navegar();
@@ -163,9 +220,11 @@ social.aoCarregar(refazerAba);
 await carregarChaves();
 // espera um instante pelo login guardado, para a primeira tela já abrir com os dados da conta;
 // se a internet estiver lenta, abre sem esperar e completa depois
-await Promise.race([nuvem.iniciar(), new Promise((r) => setTimeout(r, 1500))]);
+ligando = nuvem.iniciar();
+porteiro(); // quem nunca entrou neste aparelho vê a tela de entrada na hora, sem esperar o servidor
+await Promise.race([ligando, new Promise((r) => setTimeout(r, 1500))]);
 pronto = true;
-navegar();
+if (porteiro()) navegar();
 
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('sw.js').catch(() => { /* sem service worker o app funciona, só não abre offline */ });

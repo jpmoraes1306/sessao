@@ -10,6 +10,7 @@ let sessao = null;
 let perfil = null;
 let perfis = []; // os dois perfis: { id, nome, foto, ativo }
 let erroLogin = '';
+let iniciado = false;
 const ouvintes = new Set();
 const avisar = () => ouvintes.forEach((fn) => fn());
 
@@ -19,6 +20,8 @@ export const aoMudar = (fn) => { ouvintes.add(fn); return () => ouvintes.delete(
 export const banco = () => cliente;
 export const disponivel = () => Boolean(cliente);
 export const erroDeLogin = () => erroLogin;
+/** A primeira conferência do login guardado já terminou? Antes disso ainda não dá para saber se há alguém logado. */
+export const iniciou = () => iniciado;
 
 /** Os perfis do app (você e o outro). `ativo = false` é quem ainda não entrou pela primeira vez. */
 export const pessoas = () => perfis.map((p) => ({ ...p, eu: p.id === sessao?.user?.id }));
@@ -81,6 +84,7 @@ export async function iniciar() {
   } catch (erro) {
     console.warn('Sem ligação com o Supabase:', erro?.message || erro);
   }
+  iniciado = true;
   avisar();
 }
 
