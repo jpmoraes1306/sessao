@@ -546,3 +546,15 @@ button.barra{width:100%;text-align:left}
 .folha-c{overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;min-height:0}
 @keyframes subir{from{transform:translateY(100%)}to{transform:none}}
 @keyframes surgir{from{opacity:0}to{opacity:1}}
+
+/* ---------- tela de entrada: aparece para quem não está logado ---------- */
+body.fechado>header,body.fechado>main,body.fechado>nav,body.fechado>.sheet{display:none}
+body.fechado .toast{z-index:70}
+.entrada{position:fixed;inset:0;z-index:60;background:radial-gradient(120% 70% at 50% 0%,#1d2a25 0%,var(--bg) 62%);overflow-y:auto;display:grid;place-items:center;padding:calc(24px + env(safe-area-inset-top,0px)) var(--gd) calc(24px + env(safe-area-inset-bottom,0px)) var(--ge)}
+.entrada-c{width:100%;max-width:340px;display:flex;flex-direction:column;align-items:center;text-align:center;gap:12px}
+.entrada-c img{border-radius:20px;box-shadow:0 12px 32px rgba(0,0,0,.5)}
+.entrada-c h1{margin:8px 0 0;font-size:34px;font-weight:800;letter-spacing:-.03em}
+.entrada-c .lema{margin:0 0 14px;color:var(--muted);font-size:16px;text-wrap:balance}
+.entrada-c .btn{width:100%;padding:14px 16px;font-size:16px}
+.entrada-c .erro{margin:0;color:var(--rt);font-size:14px;background:color-mix(in srgb,var(--rt) 12%,transparent);border-radius:11px;padding:10px 12px}
+.entrada-c .texto{font-size:13px;margin-top:10px}
