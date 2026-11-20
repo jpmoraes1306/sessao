@@ -164,3 +164,16 @@ export async function montarCuriosidades(el, ctx, imdbId) {
   };
   desenhar();
 }
+
+/** Tela de quem ainda não tem as chaves. Sem login, o caminho é entrar: as chaves vêm da conta. */
+export function semChaves(el) {
+  if (nuvem.usuario() || !nuvem.disponivel()) {
+    el.innerHTML = '<div class="vazio"><b>Falta a chave do TMDB</b>O Sessão busca filmes e séries direto no TMDB. Cole a chave no Perfil para começar.<a class="btn small" href="#/perfil">Abrir o Perfil</a></div>';
+    return;
+  }
+  el.innerHTML = '<div class="vazio"><b>Entre para começar</b>O Sessão é de uso pessoal: só as contas Google cadastradas entram. Depois de entrar, suas notas, listas e diário aparecem aqui.<button class="btn small on-seen" data-acao="entrar-google">Entrar com o Google</button></div>';
+  $('[data-acao="entrar-google"]', el).onclick = async (e) => {
+    e.currentTarget.disabled = true;
+    try { await nuvem.entrar(); } catch { e.target.disabled = false; toast('Não deu para abrir o login'); }
+  };
+}

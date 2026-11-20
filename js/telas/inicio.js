@@ -9,6 +9,7 @@ import * as social from '../social.js';
 import * as andamento from '../andamento.js';
 import * as especial from '../especial.js';
 import * as avisos from '../avisos.js';
+import { semChaves } from './comum.js';
 import { carinha } from '../ovo.js';
 import { $, esc, nota, notaMinha, tile, poster, link, dataCurta, dataBR, contagem, proximaTerca, duracao, hoje, toast, IC } from '../ui.js';
 
@@ -172,7 +173,7 @@ async function atividade(el) {
 /* ---------- página ---------- */
 export function render(el) {
   if (!temChaves()) {
-    el.innerHTML = `<div class="vazio"><b>Falta a chave do TMDB</b>O Sessão busca filmes e séries direto no TMDB. Cole a sua chave no Perfil para começar.<a class="btn small" href="#/perfil">Abrir o Perfil</a></div>`;
+    semChaves(el);
     return;
   }
   el.innerHTML = `

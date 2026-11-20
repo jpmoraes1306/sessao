@@ -5,6 +5,7 @@ import * as tmdb from '../tmdb.js';
 import { temChaves } from '../config.js';
 import * as streaming from '../streaming.js';
 import { carinha } from '../ovo.js';
+import { semChaves } from './comum.js';
 import { $, esc, linha, headshot, foto, situacao } from '../ui.js';
 
 export const manter = true; // voltar de uma ficha não apaga a busca
@@ -85,7 +86,7 @@ export function atualizar(el) { desenharLista(el); } // notas e "quero ver" pode
 
 export function render(el) {
   if (!temChaves()) {
-    el.innerHTML = `<div class="vazio"><b>Falta a chave do TMDB</b>Cole a sua chave no Perfil para buscar.<a class="btn small" href="#/perfil">Abrir o Perfil</a></div>`;
+    semChaves(el);
     return;
   }
   el.innerHTML = `<section>
