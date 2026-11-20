@@ -4,7 +4,7 @@
 import * as tmdb from '../tmdb.js';
 import { temChaves } from '../config.js';
 import * as streaming from '../streaming.js';
-import { carinha } from '../ovo.js';
+import { simboloEscondido } from '../ovo.js';
 import { semChaves } from './comum.js';
 import { $, esc, linha, headshot, foto, situacao } from '../ui.js';
 
@@ -93,7 +93,7 @@ export function render(el) {
     <label class="search" for="q"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg>
       <input id="q" type="search" inputmode="search" enterkeyhint="search" placeholder="Filme, série, ator ou diretor" value="${esc(estado.q)}" autocomplete="off" autocapitalize="off" spellcheck="false">
       <button class="limpar" data-limpar aria-label="Limpar busca" ${estado.q ? '' : 'hidden'}>×</button></label>
-    <div class="seg" role="group" aria-label="Tipo">${TIPOS.map(([k, l]) => `<button data-tipo="${k}" aria-pressed="${estado.tipo === k}">${l}</button>`).join('')}${carinha('buscar')}</div>
+    <div class="seg" role="group" aria-label="Tipo">${TIPOS.map(([k, l]) => `<button data-tipo="${k}" aria-pressed="${estado.tipo === k}">${l}</button>`).join('')}${simboloEscondido('buscar')}</div>
     <div class="seg"><button data-meus aria-pressed="${estado.meus}">Só nos meus streamings</button></div>
     <div id="res">${lista()}</div>
   </section>`;

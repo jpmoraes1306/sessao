@@ -9,7 +9,7 @@ import * as social from '../social.js';
 import * as andamento from '../andamento.js';
 import * as avisos from '../avisos.js';
 import { semChaves } from './comum.js';
-import { carinha } from '../ovo.js';
+import { simboloEscondido } from '../ovo.js';
 import { $, esc, nota, notaMinha, tile, poster, link, dataCurta, contagem, proximaTerca, duracao, hoje, toast, corDe, IC } from '../ui.js';
 
 export const manter = true; // ao voltar de uma ficha, a aba continua como estava
@@ -170,7 +170,7 @@ export function render(el) {
     <section id="s-estreias"><h2>Próximas estreias <small><a class="link" href="#/calendario/${hoje().slice(0, 7)}">Calendário</a></small></h2><div id="estreias">${esqueleto()}</div></section>
     <section id="s-cartaz"><h2>Em cartaz <small>juntos: ${dataCurta(proximaTerca(''))}</small></h2><div id="cartaz">${esqueleto()}</div></section>
     <section id="s-alta"><h2>Em alta <span class="seg" role="group" aria-label="Filmes ou séries" style="flex:none"><button data-alta="filme" aria-pressed="${altaTipo === 'filme'}">Filmes</button><button data-alta="serie" aria-pressed="${altaTipo === 'serie'}">Séries</button></span></h2><div id="alta">${esqueleto()}</div></section>
-    <p class="note">"Juntos" é a primeira terça-feira a partir da estreia. O filme do dia é o mesmo para vocês dois. Este app usa a API do TMDB, mas não é endossado nem certificado pelo TMDB.</p>${carinha('inicio')}`;
+    <p class="note">"Juntos" é a primeira terça-feira a partir da estreia. O filme do dia é o mesmo para vocês dois. Este app usa a API do TMDB, mas não é endossado nem certificado pelo TMDB.</p>${simboloEscondido('inicio')}`;
   atalhos(el);
   atualizar(el);
 

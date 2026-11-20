@@ -6,7 +6,7 @@ import * as social from '../social.js';
 import * as mix from '../mix.js';
 import * as streaming from '../streaming.js';
 import * as notasfora from '../notasfora.js';
-import { carinha } from '../ovo.js';
+import { simboloEscondido } from '../ovo.js';
 import { esc, tile } from '../ui.js';
 
 const filtro = { lista: 'minha', ordem: 'recentes', genero: '', epoca: '', meus: false };
@@ -50,7 +50,7 @@ export async function render(el) {
   if (!logado && filtro.lista !== 'minha') filtro.lista = 'minha';
   const LISTAS = [['minha', 'Minha'], ...(o ? [['dele', o.nome]] : []), ...(logado ? [['juntos', 'Juntos']] : []), ...(o ? [['mix', 'Mix']] : [])];
   const seletor = LISTAS.length > 1 ? `<div class="seg" role="group" aria-label="Lista">${LISTAS.map(([k, r]) => `<button data-lista="${k}" aria-pressed="${filtro.lista === k}">${esc(r)}</button>`).join('')}</div>` : '';
-  const moldura = (miolo, resumo = '') => `<section>${seletor}${resumo || carinha('lista') ? `<p class="sub2">${resumo}${carinha('lista')}</p>` : ''}${miolo}</section>`;
+  const moldura = (miolo, resumo = '') => `<section>${seletor}${resumo || simboloEscondido('lista') ? `<p class="sub2">${resumo}${simboloEscondido('lista')}</p>` : ''}${miolo}</section>`;
   const esperando = (texto) => { el.innerHTML = moldura(`<div class="card"><p>${texto}</p><div class="lbar-big"><i id="andamento-filtro" style="width:5%"></i></div></div>`); ligar(); };
 
   function ligar() {

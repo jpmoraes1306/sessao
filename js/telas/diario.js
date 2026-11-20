@@ -3,7 +3,7 @@
 // Sem login, lista o que foi marcado como visto neste aparelho.
 import * as dados from '../dados.js';
 import * as nuvem from '../nuvem.js';
-import { carinha } from '../ovo.js';
+import { simboloEscondido } from '../ovo.js';
 import { esc, selo, poster, IC } from '../ui.js';
 
 const DIAS = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb'];
@@ -22,7 +22,7 @@ function desenhar(el, entradas, { temMais = false, vazio = '' } = {}) {
         <div><div class="t">${esc(t.titulo)}</div><div class="s">${[t.ano, t.tipo === 'serie' ? 'série' : ''].filter(Boolean).join(' · ')}</div></div>
         <span class="r fim">${t.revisto ? `<span class="rev" title="Visto de novo" aria-label="visto de novo">${IC.rever}</span>` : ''}${t.curtido ? '<span class="heart">♥</span>' : ''}${selo(t.nota)}</span></a>`).join('')}</div></section>`;
   }).join('') || vazio}
-  ${temMais ? '<button class="btn" data-acao="mais" style="align-self:center">Mostrar mais antigos</button>' : ''}${carinha('diario')}`;
+  ${temMais ? '<button class="btn" data-acao="mais" style="align-self:center">Mostrar mais antigos</button>' : ''}${simboloEscondido('diario')}`;
 }
 
 const VAZIO = `<div class="vazio"><b>Nada no diário ainda</b>Marque um filme como visto ou dê uma nota para ele aparecer aqui.<a class="btn small" href="#/buscar">Buscar um título</a></div>`;

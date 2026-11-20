@@ -5,7 +5,8 @@ import * as nuvem from '../nuvem.js';
 import * as social from '../social.js';
 import * as tmdb from '../tmdb.js';
 import { img } from '../tmdb.js';
-import { carinha, dicaDeHoje } from '../ovo.js';
+import * as ovo from '../ovo.js';
+import { simboloEscondido } from '../ovo.js';
 import { chave, salvarChaves, MEUS_STREAMINGS, SERVICOS } from '../config.js';
 import * as avisos from '../avisos.js';
 import { limpar as limparCache } from '../cache.js';
@@ -156,8 +157,18 @@ function corpoPerfil(pessoa, ehMeu, d, e) {
     ${e.maisAntigo ? `<div class="fact"><em>O mais antigo</em><a href="#/filme/${e.maisAntigo.id}">${esc(e.maisAntigo.titulo)}</a> (${e.maisAntigo.ano})</div>` : ''}</div></section>` : ''}`;
 }
 
-function ajustes() {
-  const u = nuvem.usuario();
+/** Cartão "Caça ao símbolo": qual é o símbolo de hoje, se você já achou, o placar do mês e a dica do lugar. */
+function cartaoOvo() {
+  const s = ovo.simboloDeHoje();
+  const achei = ovo.acheiHoje();
+  const placar = ovo.placarDoMes();
+  return `<p class="ovo-hoje"><span class="ovo-m">${s.svg}</span><span>Hoje o símbolo escondido é <b>${esc(s.nome)}</b>. ${achei ? `Você já achou${typeof achei === 'string' ? ` às ${achei}` : ''}.` : 'Está em algum lugar do app, e quem achar primeiro ganha o dia.'}</span></p>
+    ${placar ? ovo.htmlPlacar(placar, 'Quem achou primeiro, placar') : ''}
+    ${achei ? (placar ? '<div class="actions"><a class="btn small on-star" href="#/frame/hoje">Jogar o frame do dia</a></div>' : '') : '<div class="actions"><button class="btn small" data-acao="dica">Me dá uma dica do lugar</button></div>'}
+    <p class="note">Muda todo dia à meia-noite. Achar o símbolo mostra o Dafoe e o Cage do dia e libera o frame do dia.</p>`;
+}
+
+function ajustes() {  const u = nuvem.usuario();
   const streamings = [...new Set(MEUS_STREAMINGS.values())];
   return `
   <section><h2>Conta</h2>
@@ -178,9 +189,8 @@ function ajustes() {
     <div class="card">${u ? `<div class="seg">${SERVICOS.map((s) => `<button data-streaming="${esc(s.nome)}" aria-pressed="${streamings.includes(s.nome)}">${esc(s.nome)}</button>`).join('')}</div>` : `<p>${esc(streamings.join(' · '))}</p>`}
       <p>Aparecem primeiro e com destaque em "Onde assistir" e valem para o filtro "Só nos meus streamings" da busca e do Quero ver.</p></div>
   </section>
-  <section><h2>Easter egg de hoje</h2>
-    <div class="card"><p>O Dafoe e o Cage do dia estão escondidos em algum lugar do app. Cada dia num lugar diferente.</p>
-      <div class="actions"><button class="btn small" data-acao="dica">Me dá uma dica</button></div></div>
+  <section><h2>Caça ao símbolo</h2>
+    <div class="card" id="cartao-ovo">${cartaoOvo()}</div>
   </section>
   <details class="avancado" ${chave('tmdb') ? '' : 'open'}><summary><span>Avançado<small>Chaves das APIs e dados deste aparelho. Não é de uso diário.</small></span><svg class="vai" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></summary>
   <section><h2>Chaves das APIs</h2>
@@ -211,8 +221,8 @@ export async function render(el) {
   const local = dados.todos();
   const topo = (numeros) => `
   <section style="align-items:center;text-align:center;gap:10px">
-    ${ehMeu ? (carinha('perfil', 'lg') || avatar(pessoa)) : avatar(pessoa)}
-    <div style="font-size:24px;font-weight:800;letter-spacing:-.02em">${esc(pessoa.nome)}</div>
+    ${avatar(pessoa)}
+    <div style="font-size:24px;font-weight:800;letter-spacing:-.02em;display:flex;align-items:center;gap:8px">${esc(pessoa.nome)}${ehMeu ? simboloEscondido('perfil') : ''}</div>
     ${ehMeu && u ? `<div class="actions" style="justify-content:center;gap:16px;margin-top:-6px"><label class="texto" style="cursor:pointer">Trocar foto<input type="file" accept="image/*" id="nova-foto" hidden></label>${nuvem.fotoEscolhida() ? '<button class="texto" data-acao="foto-google">Usar a do Google</button>' : ''}</div>` : ''}
     ${o ? `<div class="seg" role="group" aria-label="Perfil"><button data-ver="" aria-pressed="${ehMeu}">Você</button><button data-ver="${o.id}" aria-pressed="${!ehMeu}">${esc(o.nome)}${o.ativo ? '' : ' (ainda não entrou)'}</button></div>` : ''}
     <div class="pstats">${numeros}</div>
@@ -223,6 +233,8 @@ export async function render(el) {
   // primeiro o que já está no aparelho; as estatísticas chegam em seguida
   el.innerHTML = `${topo(ehMeu ? numerosLocais : '')}${u ? '<div id="corpo-perfil" style="display:flex;flex-direction:column;gap:28px"><div class="skel tit"></div><div class="skel txt"></div><div class="skel txt" style="width:70%"></div></div>' : ''}${ehMeu ? ajustes() : ''}`;
   ligar(el);
+  // o placar da caça ao símbolo chega da conta um instante depois
+  if (ehMeu) ovo.pronto().then(() => { const c = $('#cartao-ovo', el); if (c && minhaVez === vez) c.innerHTML = cartaoOvo(); });
 
   if (!u) return;
   let d;
@@ -348,7 +360,7 @@ function ligar(el) {
       try { const n = await avisos.testar(); toast(n ? 'Aviso de teste enviado' : 'Nenhum aparelho recebeu. Desligue e ative de novo.'); } catch { toast('Não deu para mandar o teste'); }
       b.disabled = false;
     } else if (acao === 'dica') {
-      b.outerHTML = `<p style="color:var(--fg)">Hoje: ${dicaDeHoje()}.</p>`;
+      b.outerHTML = `<p style="color:var(--fg)">Hoje está ${ovo.dicaDeHoje()}.</p>`;
     } else if (acao === 'limpar-cache') {
       await limparCache();
       toast('Cache limpo');

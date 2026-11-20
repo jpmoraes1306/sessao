@@ -4,8 +4,9 @@ import * as omdb from '../omdb.js';
 import * as dados from '../dados.js';
 import * as nuvem from '../nuvem.js';
 import { grupoSocial, botaoRever, tocarExtra, montarReviews, montarCuriosidades } from './comum.js';
-import { carinha } from '../ovo.js';
-import { $, esc, nota, notaMinha, selo, blocoNota, ligarReguas, poster, elencoJunto, tile, blocoNotas, blocoProvedores, blocoReviews, erroFicha, toast, perguntar, dataCurta, contagem, hoje, corDe, IC } from '../ui.js';
+import { simboloEscondido } from '../ovo.js';
+import { secaoComunidade } from './reviews.js';
+import { $, esc, nota, notaMinha, selo, blocoNota, ligarReguas, poster, elencoJunto, tile, blocoNotas, blocoProvedores, erroFicha, toast, perguntar, dataCurta, contagem, hoje, corDe, IC } from '../ui.js';
 import { img } from '../tmdb.js';
 import { secaoPremios, classificacao } from './filme.js';
 
@@ -221,9 +222,9 @@ export async function abrir(el, id, ctx) {
     <section id="premios" hidden></section>
     <section id="curiosidades" hidden></section>
     ${nuvem.usuario() ? '<section id="reviews-nossas"></section>' : ''}
-    ${s.reviews.length ? `<section><h2>Reviews da comunidade <small>TMDB</small></h2>${blocoReviews(s.reviews)}</section>` : ''}
+    <section id="reviews-comunidade" hidden></section>
     ${s.parecidos.length ? `<section><h2>Séries parecidas</h2><div class="row">${s.parecidos.map((c) => tile(c)).join('')}</div></section>` : ''}
-    <p class="note">Dados e imagens: TMDB. Notas IMDb, Rotten Tomatoes e Metacritic: OMDb. Prêmios: OMDb e Wikidata.</p>${carinha('ficha')}
+    <p class="note">Dados e imagens: TMDB. Notas IMDb, Rotten Tomatoes e Metacritic: OMDb. Prêmios: OMDb e Wikidata.</p>${simboloEscondido('ficha')}
    </div>`;
   // a sinopse curta não precisa do "ler tudo"
   const syn = $('.syn', el);
@@ -343,6 +344,7 @@ export async function abrir(el, id, ctx) {
 
   montarReviews(el, ctx, meta, () => redesenhar());
   montarCuriosidades(el, ctx, s.imdbId);
+  secaoComunidade(el, ctx, 'serie', s.id);
 
   // abre a temporada em que a pessoa está (ou a primeira, se ainda não começou)
   const comeco = proximoParaVer();

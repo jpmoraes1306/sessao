@@ -2,61 +2,45 @@
 import * as tmdb from '../tmdb.js';
 import * as dados from '../dados.js';
 import * as nuvem from '../nuvem.js';
-import { carinha } from '../ovo.js';
+import { simboloEscondido } from '../ovo.js';
+import * as rankings from '../rankings.js';
 import { $, esc, nota, selo, foto, tile, poster, erroFicha, dataBR, corDe } from '../ui.js';
 
 // preferências de ordenação valem para todas as pessoas enquanto o app está aberto
 let ordem = 'nota';
 let esconderVistos = false;
 
-/* ---------- rankings de vocês que são desta pessoa (ex.: "Nolan ranked" na página do Nolan) ---------- */
-let rankings = null; // listas com ordem dos dois, com os itens; carrega uma vez por login
-let rankingsDe = null;
-
-async function listasComOrdem() {
-  const b = nuvem.banco();
-  const eu = nuvem.usuario()?.id;
-  if (!b || !eu) return [];
-  if (rankings && rankingsDe === eu) return rankings;
-  const { data } = await b.from('listas').select('id, nome, user_id, lista_itens(posicao, tipo, tmdb_id)').eq('ranqueada', true);
-  rankings = data || [];
-  rankingsDe = eu;
-  return rankings;
+/* ---------- rankings de vocês que são desta pessoa (o seu, montado no app, e o do outro) ---------- */
+/** Uma linha do ranking; `direita` é o canto (a posição que o outro deu, ou a sua nota). */
+function linhaRanking(i, direita) {
+  return `<a class="rk-l" href="#/${i.tipo}/${i.tmdb_id}"><span class="pos">${i.posicao}</span>${poster({ titulo: i.r.titulo || '', poster: i.r.poster }, { tam: 'w154' })}
+    <div class="tt"><b>${esc(i.r.titulo || 'Sem título')}</b><span>${i.r.ano || ''}</span></div><span class="dele">${direita}</span></a>`;
 }
-
-const semAcento = (s) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
-
-/** A lista é desta pessoa quando o sobrenome está no nome da lista e metade dos títulos é dela, ou quando quase todos são dela. */
-async function rankingsDaPessoa(p) {
-  const feitos = new Map(p.creditos.map((c) => [`${c.tipo}:${c.id}`, c]));
-  const sobrenome = semAcento(p.nome.trim().split(/\s+/).pop());
-  const achadas = [];
-  for (const l of await listasComOrdem()) {
-    const itens = (l.lista_itens || []).slice().sort((a, b) => a.posicao - b.posicao);
-    if (itens.length < 2) continue;
-    const dentro = itens.filter((i) => feitos.has(`${i.tipo}:${i.tmdb_id}`)).length / itens.length;
-    const noNome = semAcento(l.nome).split(/[^a-z0-9]+/).includes(sobrenome);
-    if ((noNome && dentro >= 0.5) || (itens.length >= 3 && dentro >= 0.9)) achadas.push({ ...l, itens });
-  }
-  if (!achadas.length) return [];
-  const fora = achadas.flatMap((l) => l.itens).filter((i) => !feitos.has(`${i.tipo}:${i.tmdb_id}`));
-  const info = fora.length ? await dados.resumos(fora).catch(() => new Map()) : new Map();
-  for (const l of achadas) for (const i of l.itens) i.r = feitos.get(`${i.tipo}:${i.tmdb_id}`) || info.get(`${i.tipo}:${i.tmdb_id}`) || {};
-  return achadas;
+/** Em que posição a outra lista pôs o mesmo título, com uma seta quando é mais alto ou mais baixo que aqui. */
+function comparar(i, outra, quem) {
+  if (!outra) { const n = dados.titulo(i.tipo, i.tmdb_id).nota; return quem === 'você' && n != null ? `sua nota ${selo(n)}` : ''; }
+  const la = outra.itens.find((x) => x.tipo === i.tipo && x.tmdb_id === i.tmdb_id);
+  if (!la) return `${quem} não pôs`;
+  const dif = i.posicao - la.posicao;
+  return `${quem} <b>${la.posicao}º</b>${dif ? ` <span class="${dif > 0 ? 'sobe' : 'desce'}" aria-label="${dif > 0 ? 'mais alto' : 'mais baixo'} que aqui">${dif > 0 ? '▲' : '▼'}</span>` : ''}`;
 }
-
-function blocoRanking(l, tudo) {
-  const dono = nuvem.pessoa(l.user_id);
-  const itens = tudo ? l.itens : l.itens.slice(0, 5);
-  return `<div class="card" data-ranking="${l.id}">
-    <div class="eyebrow">${dono?.eu ? 'Seu ranking' : `Ranking de ${esc(dono?.nome || 'vocês')}`}</div>
-    <div class="list" style="margin-top:6px">${itens.map((i) => { const meu = dados.titulo(i.tipo, i.tmdb_id); return `
-      <a class="li" href="#/${i.tipo}/${i.tmdb_id}" style="grid-template-columns:26px 36px 1fr auto"><span class="date" style="font-size:18px">${i.posicao}</span>${poster({ titulo: i.r.titulo || '', poster: i.r.poster }, { tam: 'w154' })}
-        <div><div class="t">${esc(i.r.titulo || 'Sem título')}</div><div class="s">${i.r.ano || ''}</div></div><span class="r">${meu.nota != null ? `você ${selo(meu.nota)}` : meu.visto ? 'visto' : ''}</span></a>`; }).join('')}</div>
-    ${!tudo && l.itens.length > 5 ? `<button class="mais" data-rank-tudo="${l.id}">ver os ${l.itens.length}</button>` : ''}
-    <p class="note" style="margin-top:6px">Lista "${esc(l.nome)}".</p></div>`;
+function blocoRankings(p, achadas, abertas) {
+  const u = nuvem.usuario();
+  if (!u) return '';
+  const meu = achadas.find((l) => l.user_id === u.id);
+  const outros = achadas.filter((l) => l.user_id !== u.id);
+  const vistos = rankings.vistosDaPessoa(p).length;
+  const lista = (l, outra, quem) => {
+    const tudo = abertas.has(l.id) || l.itens.length <= 6;
+    return `<div class="rk">${(tudo ? l.itens : l.itens.slice(0, 5)).map((i) => linhaRanking(i, comparar(i, outra, quem))).join('')}</div>
+      ${l.itens.length > 6 ? `<button class="mais" data-rank-tudo="${l.id}" style="margin-top:0">${tudo ? 'Mostrar só os 5 primeiros' : `Ver os ${l.itens.length}`}</button>` : ''}`;
+  };
+  const primeiroNome = esc(p.nome.trim().split(/\s+/).pop());
+  let meuBloco = '';
+  if (meu) meuBloco = `<section><h2>Seu ranking <small><a class="link" href="#/ranking/pessoa-${p.id}">Editar</a></small></h2>${lista(meu, outros[0], esc(nuvem.pessoa(outros[0]?.user_id)?.nome || ''))}</section>`;
+  else if (vistos >= 2) meuBloco = `<section><h2>Seu ranking</h2><div class="grupo"><div class="lin"><span class="n">Você ainda não ranqueou ${primeiroNome}<small>Já viu ${vistos} títulos. Começa pela ordem das suas notas.</small></span><a class="btn small on-star" href="#/ranking/pessoa-${p.id}">Montar</a></div></div></section>`;
+  return meuBloco + outros.map((l) => `<section><h2>Ranking de ${esc(nuvem.pessoa(l.user_id)?.nome || 'vocês')} <small>lista "${esc(l.nome)}"</small></h2>${lista(l, meu, 'você')}</section>`).join('');
 }
-
 function idade(nasc, morte) {
   const fim = morte ? new Date(morte) : new Date();
   const n = new Date(nasc);
@@ -108,11 +92,7 @@ export async function abrir(el, id, ctx) {
       <button data-ordem="ano" aria-pressed="${ordem === 'ano'}">Mais recentes</button>
       <button data-esconder aria-pressed="${esconderVistos}">Esconder vistos</button>
     </div>
-    ${lista.length ? `<div class="grid3">${lista.map((c) => {
-      const m = dados.titulo(c.tipo, c.id);
-      const papel = c.categorias[categoria];
-      return tile(c, m.nota != null ? `sua nota ${selo(m.nota)}` : `${c.ano || 'em breve'}${papel && categoria === 'Atuação' ? ` · ${esc(papel)}` : ''}`);
-    }).join('')}</div>` : `<p class="note">${esconderVistos && total ? 'Você já viu todos.' : 'Nada por aqui.'}</p>`}`;
+    ${lista.length ? `<div class="grid4">${lista.map((c) => tile(c)).join('')}</div>` : `<p class="note">${esconderVistos && total ? 'Você já viu todos.' : 'Nada por aqui.'}</p>`}`;
   }
 
   const [a, b] = corDe(p.nome);
@@ -129,28 +109,35 @@ export async function abrir(el, id, ctx) {
       <div style="min-width:0"><div class="eyebrow">${esc(categorias.slice(0, 2).join(' · ') || p.depto)}</div><h1>${esc(p.nome)}</h1></div></div>
     ${vida ? `<p class="note" style="font-size:13px;color:var(--muted)">${vida}</p>` : ''}
     ${p.bio ? `<p class="syn clamp">${esc(p.bio)}</p><button class="mais" data-acao="abrir-texto">Ler mais</button>${p.bioIdioma === 'en' ? '<p class="note" style="margin-top:-10px">Biografia ainda sem tradução no TMDB.</p>' : ''}` : ''}
-    <div id="rankings" style="display:flex;flex-direction:column;gap:14px" hidden></div>
+    <div id="rankings" style="display:flex;flex-direction:column;gap:22px" hidden></div>
     <div id="filmografia" style="display:flex;flex-direction:column;gap:14px">${corpo()}</div>
-    <p class="note">Filmografia e fotos: TMDB.</p>${carinha('ficha')}
+    <p class="note">Filmografia e fotos: TMDB.</p>${simboloEscondido('ficha')}
    </div>`;
   const syn = $('.syn', el);
   if (syn && syn.scrollHeight <= syn.clientHeight + 2) { syn.classList.remove('clamp'); syn.nextElementSibling?.remove(); }
 
   let doRanking = [];
-  rankingsDaPessoa(p).then((achadas) => {
+  const abertas = new Set(); // rankings em que a pessoa pediu para ver todos
+  const desenharRankings = () => {
     const caixa = $('#rankings', el);
-    if (!ctx.vivo() || !caixa || !achadas.length) return;
-    doRanking = achadas;
-    caixa.innerHTML = achadas.map((l) => blocoRanking(l, false)).join('');
+    const html = blocoRankings(p, doRanking, abertas);
+    if (!caixa || !html) return;
+    caixa.innerHTML = html;
     caixa.hidden = false;
-  }).catch(() => { /* sem ranking a página continua igual */ });
+  };
+  rankings.daPessoa(p).catch(() => []).then((achadas) => {
+    if (!ctx.vivo()) return;
+    doRanking = achadas;
+    desenharRankings();
+  });
 
   el.onclick = (e) => {
     const t = e.target.closest('button');
     if (!t) return;
     if (t.dataset.rankTudo) {
-      const l = doRanking.find((x) => String(x.id) === t.dataset.rankTudo);
-      if (l) t.closest('[data-ranking]').outerHTML = blocoRanking(l, true);
+      const id = Number(t.dataset.rankTudo);
+      if (abertas.has(id)) abertas.delete(id); else abertas.add(id);
+      desenharRankings();
       return;
     }
     if (t.dataset.cat) categoria = t.dataset.cat;
