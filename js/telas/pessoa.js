@@ -128,7 +128,7 @@ export async function abrir(el, id, ctx) {
     <div class="pessoa-topo">${foto(p, 'lg')}
       <div style="min-width:0"><div class="eyebrow">${esc(categorias.slice(0, 2).join(' · ') || p.depto)}</div><h1>${esc(p.nome)}</h1></div></div>
     ${vida ? `<p class="note" style="font-size:13px;color:var(--muted)">${vida}</p>` : ''}
-    ${p.bio ? `<p class="syn clamp">${esc(p.bio)}</p><button class="mais" data-acao="abrir-texto">ler tudo</button>${p.bioIdioma === 'en' ? '<p class="note" style="margin-top:-10px">Biografia ainda sem tradução no TMDB.</p>' : ''}` : ''}
+    ${p.bio ? `<p class="syn clamp">${esc(p.bio)}</p><button class="mais" data-acao="abrir-texto">Ler mais</button>${p.bioIdioma === 'en' ? '<p class="note" style="margin-top:-10px">Biografia ainda sem tradução no TMDB.</p>' : ''}` : ''}
     <div id="rankings" style="display:flex;flex-direction:column;gap:14px" hidden></div>
     <div id="filmografia" style="display:flex;flex-direction:column;gap:14px">${corpo()}</div>
     <p class="note">Filmografia e fotos: TMDB.</p>${carinha('ficha')}

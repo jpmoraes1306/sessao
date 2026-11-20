@@ -1,5 +1,5 @@
-// Aba Início: filme do dia (o mesmo para os dois), séries em andamento, estreias com a terça sugerida,
-// em cartaz e em alta. Feed, calendário e Mix entram nas fases 3 e 4.
+// Aba Início: um destaque que passa de lado (filme do dia, o mesmo para os dois; próximo episódio;
+// sessão marcada), atalhos e fileiras: atividade, séries em andamento, estreias, em cartaz e em alta.
 import * as tmdb from '../tmdb.js';
 import * as omdb from '../omdb.js';
 import * as dados from '../dados.js';
@@ -11,7 +11,7 @@ import * as especial from '../especial.js';
 import * as avisos from '../avisos.js';
 import { semChaves } from './comum.js';
 import { carinha } from '../ovo.js';
-import { $, esc, nota, notaMinha, tile, poster, link, dataCurta, dataBR, contagem, proximaTerca, duracao, hoje, toast, IC } from '../ui.js';
+import { $, esc, nota, notaMinha, tile, poster, link, dataCurta, contagem, proximaTerca, duracao, hoje, toast, corDe, IC } from '../ui.js';
 
 export const manter = true; // ao voltar de uma ficha, a aba continua como estava
 
@@ -52,54 +52,72 @@ async function filmeDoDia() {
   return { f, notas, origem };
 }
 
-function cartaoDoDia({ f, notas, origem }) {
+/* ---------- destaque: cartões que passam de lado ---------- */
+const partes = { dia: '', serie: '', sessao: '' }; // cada pedaço chega no seu tempo
+const fundoDe = (caminho, tam = 'w780') => (caminho ? `<img src="${tmdb.img(caminho, tam)}" alt="" crossorigin="anonymous" onerror="this.remove()">` : '');
+const cores = (titulo) => { const [a, b] = corDe(titulo || ''); return `style="--a:${a};--b:${b}"`; };
+
+function desenharDestaque(el) {
+  const alvo = $('#destaque', el);
+  if (!alvo) return;
+  const lista = [partes.dia, partes.serie, partes.sessao].filter(Boolean);
+  if (!lista.length) { alvo.innerHTML = '<p class="note">Sem sugestão hoje.</p>'; return; }
+  alvo.innerHTML = `<div class="row dest${lista.length === 1 ? ' um' : ''}" id="dest">${lista.join('')}</div>
+    ${lista.length > 1 ? `<div class="pontos" aria-hidden="true">${lista.map((_, i) => `<i class="${i ? '' : 'on'}"></i>`).join('')}</div>` : ''}`;
+  const d = $('#dest', el);
+  d.onscroll = () => {
+    const passo = d.firstElementChild.getBoundingClientRect().width + 10;
+    const n = Math.round(d.scrollLeft / passo);
+    alvo.querySelectorAll('.pontos i').forEach((p, i) => p.classList.toggle('on', i === n));
+  };
+}
+
+function slideDoDia({ f, notas }) {
   const meu = dados.titulo('filme', f.id);
-  const dir = f.diretores[0]?.nome;
-  const fora = [notas?.imdb ? `IMDb ${nota(notas.imdb)}` : `TMDB ${nota(f.nota)}`, notas?.rotten != null ? `Rotten ${notas.rotten}%` : ''].filter(Boolean).join(' · ');
-  const outro = esc(nuvem.outro()?.nome || 'o outro');
-  const naMinha = meu.quero;
-  const naDele = social.doOutro('filme', f.id)?.quer;
-  const porque = {
-    tmdb: 'O mesmo para os dois. Sai dos filmes mais bem avaliados enquanto o "Quero ver" de vocês está vazio ou sem login.',
-    juntos: 'Está na lista "Queremos ver juntos".',
-    dois: `Está no "Quero ver" de vocês dois.`,
-    um: `Está no "Quero ver" ${naMinha && naDele ? 'de vocês dois' : naMinha ? 'seu' : `de ${outro}`}. O mesmo filme aparece para os dois.`,
-  }[origem];
-  return `<a class="hero" href="${link(f)}">${poster(f, { lg: true })}
-    <div class="info"><span class="eyebrow">Para hoje${meu.visto ? ' · você já viu' : ''}</span><h3>${esc(f.titulo)}</h3>
-    <p>${[f.ano, dir, f.duracao ? duracao(f.duracao) : ''].filter(Boolean).map(esc).join(' · ')}</p><p>${fora}</p>
-    <div class="why">${porque}</div></div></a>`;
+  const fora = notas?.imdb ? `IMDb ${nota(notas.imdb)}` : (f.nota ? `TMDB ${nota(f.nota)}` : '');
+  return `<a class="slide" href="${link(f)}" ${cores(f.titulo)}>${fundoDe(f.fundo)}
+    <div><div class="eyebrow">Filme do dia${meu.visto ? ' · você já viu' : ''}</div><div class="tt">${esc(f.titulo)}</div>
+    <div class="s">${[f.ano, f.diretores[0]?.nome, f.duracao ? duracao(f.duracao) : '', fora].filter(Boolean).map(esc).join(' · ')}</div></div></a>`;
 }
 
 /* ---------- séries em andamento (estilo TV Time) ---------- */
 const cod = (t, e) => `S${String(t).padStart(2, '0')} E${String(e).padStart(2, '0')}`;
 
+function slideDaSerie(t, { s, total, vistos, prox, ep }) {
+  const pct = total ? Math.round((vistos / total) * 100) : 0;
+  return `<a class="slide" href="${link(t)}" ${cores(s.titulo)}>${fundoDe(ep?.still || s.fundo)}
+    <div><div class="eyebrow">Continue vendo</div><div class="tt">${esc(s.titulo)}</div>
+    <div class="s">${cod(prox.t, prox.e)} · ${esc(ep?.nome || `Episódio ${prox.e}`)}</div><div class="bar"><i style="width:${pct}%"></i></div></div></a>`;
+}
+
 function cartaoSerie(t, sit) {
   const { s, total, vistos, prox, ep, inedito } = sit;
   const pct = total ? Math.round((vistos / total) * 100) : 0;
-  const novo = inedito ? `<div class="and-n">Próximo episódio ${contagem(inedito.data)} · ${cod(inedito.t, inedito.e)} · ${dataCurta(inedito.data)}</div>` : '';
-  const meio = prox
-    ? `<a class="still" href="${link(t)}">${ep?.still ? `<img src="${tmdb.img(ep.still, 'w300')}" alt="" loading="lazy" crossorigin="anonymous" onerror="this.remove()">` : ''}${ep?.nota && ep.votos ? `<span class="nt">${nota(ep.nota)}</span>` : ''}</a>
-       <a class="meio" href="${link(t)}"><div class="ep-cod">${cod(prox.t, prox.e)}${ep?.duracao ? ` · ${ep.duracao}m` : ''}</div><div class="ep-nome">${esc(ep?.nome || `Episódio ${prox.e}`)}</div><div class="ep-data">${ep?.data ? dataCurta(ep.data) : ''}</div></a>
-       <div class="ep-b"><button class="ic" data-acao="ver-ep" data-serie="${t.id}" data-t="${prox.t}" data-e="${prox.e}" aria-label="Marcar ${cod(prox.t, prox.e)} como visto">${IC.olho}</button><a class="ic" href="${link(t)}" aria-label="Abrir a série para dar nota">${IC.lapis}</a></div>`
-    : `<a class="still" href="${link(t)}">${s.fundo ? `<img src="${tmdb.img(s.fundo, 'w300')}" alt="" loading="lazy" crossorigin="anonymous" onerror="this.remove()">` : ''}</a>
-       <a class="meio" href="${link(t)}"><div class="ep-nome ok">${s.acabou ? 'Série concluída' : 'Série em dia'}</div><div class="ep-data">${s.acabou ? 'Você viu tudo.' : 'Você viu tudo que já saiu.'}</div></a><span></span>`;
-  return `<div class="and" data-serie="${t.id}"><a class="and-t" href="${link(t)}">${esc(s.titulo)}</a>
-    <div class="and-c">${meio}</div>
-    <div class="and-p"><div class="lbar-big"><i style="width:${pct}%"></i></div><span>${pct}%</span></div>${novo}</div>`;
+  const foto = prox ? ep?.still : s.fundo;
+  const olho = prox ? `<button class="ic" data-acao="ver-ep" data-serie="${t.id}" data-t="${prox.t}" data-e="${prox.e}" aria-label="Marcar ${cod(prox.t, prox.e)} como visto">${IC.olho}</button>` : '';
+  const linha2 = prox
+    ? `${cod(prox.t, prox.e)}${ep?.duracao ? ` · ${ep.duracao} min` : ''} · ${esc(ep?.nome || `Episódio ${prox.e}`)}`
+    : (s.acabou ? 'Série concluída' : 'Em dia: você viu tudo que já saiu');
+  return `<div class="sc" data-serie="${t.id}">
+    <div class="still"><a href="${link(t)}" style="position:absolute;inset:0" aria-label="${esc(s.titulo)}">${foto ? `<img src="${tmdb.img(foto, 'w300')}" alt="" loading="lazy" crossorigin="anonymous" onerror="this.remove()">` : ''}</a>${olho}<i style="width:${pct}%"></i></div>
+    <a class="t" href="${link(t)}">${esc(s.titulo)}</a><div class="s">${linha2}</div>
+    ${inedito ? `<div class="novo">Episódio novo ${contagem(inedito.data)} · ${dataCurta(inedito.data)}</div>` : ''}</div>`;
 }
 
 async function emAndamento(el) {
   const s = $('#em-andamento', el);
   if (!s) return;
   const series = andamento.acompanhadas().slice(0, 8);
-  if (!series.length) { s.hidden = true; s.innerHTML = ''; return; }
+  if (!series.length) { s.hidden = true; s.innerHTML = ''; partes.serie = ''; desenharDestaque(el); atalhos(el); return; }
   s.hidden = false;
   if (!s.innerHTML) s.innerHTML = '<h2>Séries em andamento</h2><div class="skel txt"></div>';
-  const cartoes = await Promise.all(series.map(async (t) => {
-    try { return cartaoSerie(t, await andamento.situacao(t.id)); } catch { return `<a class="li" href="${link(t)}">${poster(t, { tam: 'w154' })}<div><div class="t">${esc(t.titulo)}</div><div class="s">Não deu para carregar agora</div></div></a>`; }
-  }));
-  if ($('#em-andamento', el)) s.innerHTML = `<h2>Séries em andamento</h2>${cartoes.join('')}`;
+  atalhos(el);
+  const situacoes = await Promise.all(series.map(async (t) => { try { return await andamento.situacao(t.id); } catch { return null; } }));
+  if (!$('#em-andamento', el)) return;
+  s.innerHTML = `<h2>Séries em andamento</h2><div class="row larga">${series.map((t, i) => (situacoes[i] ? cartaoSerie(t, situacoes[i]) : `<a class="sc" href="${link(t)}"><div class="still"></div><span class="t">${esc(t.titulo)}</span><span class="s">Não deu para carregar agora</span></a>`)).join('')}</div>`;
+  const i = situacoes.findIndex((x) => x?.prox);
+  partes.serie = i >= 0 ? slideDaSerie(series[i], situacoes[i]) : '';
+  desenharDestaque(el);
 }
 
 /* ---------- sessões juntos (regra da terça) ---------- */
@@ -108,22 +126,27 @@ async function sessoesJuntos(el) {
   const s = $('#sessoes-juntos', el);
   if (!s || !nuvem.usuario()) return;
   const lista = social.sessoesJuntos().filter((x) => social.estadoDaSessao(x) !== 'feita');
-  if (!lista.length) { s.hidden = true; s.innerHTML = ''; return; }
+  if (!lista.length) { s.hidden = true; s.innerHTML = ''; partes.sessao = ''; desenharDestaque(el); return; }
   const info = await dados.resumos(lista);
   if (!$('#sessoes-juntos', el)) return;
   const outro = esc(nuvem.outro()?.nome || 'o outro');
+  const textoDe = (x) => ({ futura: `Marcada para ${dataCurta(x.data)} · ${contagem(x.data)}`, 'hoje-ou-passou': x.data === hoje() ? 'É hoje. Já viram?' : `Era ${dataCurta(x.data)}. Já viram?`, confirmar: `${outro} marcou que vocês viram em ${dataCurta(x.data)}` }[social.estadoDaSessao(x)]);
   s.hidden = false;
   s.innerHTML = `<h2>Sessões de vocês <small>para verem juntos</small></h2><div class="list">${lista.map((x) => {
     const r = info.get(`${x.tipo}:${x.tmdb_id}`) || {};
     const estado = social.estadoDaSessao(x);
-    const texto = { futura: `Marcada para ${dataCurta(x.data)} · ${contagem(x.data)}`, 'hoje-ou-passou': x.data === hoje() ? 'É hoje. Já viram?' : `Era ${dataCurta(x.data)}. Já viram?`, confirmar: `${outro} marcou que vocês viram em ${dataCurta(x.data)}` }[estado];
     const botoes = { futura: `<button class="btn small" data-acao="cancelar-sessao" data-id="${x.id}">Cancelar</button>`,
       'hoje-ou-passou': `<button class="btn small on-seen" data-acao="vimos" data-id="${x.id}">Vimos</button><button class="btn small" data-acao="cancelar-sessao" data-id="${x.id}">Cancelar</button>`,
       confirmar: `<button class="btn small on-seen" data-acao="vimos" data-id="${x.id}">Confirmar que vi</button>` }[estado];
-    return `<div class="li" style="grid-template-columns:36px 44px 1fr"><div class="date">${Number(x.data.slice(8))}<small>${MES[Number(x.data.slice(5, 7)) - 1]}</small></div>
+    return `<div class="li" style="grid-template-columns:36px 46px 1fr"><div class="date">${Number(x.data.slice(8))}<small>${MES[Number(x.data.slice(5, 7)) - 1]}</small></div>
       <a href="#/${x.tipo}/${x.tmdb_id}">${poster({ titulo: r.titulo || '', poster: r.poster }, { tam: 'w154' })}</a>
-      <div><a class="t" href="#/${x.tipo}/${x.tmdb_id}" style="text-decoration:none">${esc(r.titulo || 'Sem título')}</a><div class="s">${texto}</div><div class="actions" style="margin-top:6px">${botoes}</div></div></div>`;
+      <div><a class="t" href="#/${x.tipo}/${x.tmdb_id}" style="text-decoration:none">${esc(r.titulo || 'Sem título')}</a><div class="s">${textoDe(x)}</div><div class="actions" style="margin-top:6px">${botoes}</div></div></div>`;
   }).join('')}</div>`;
+  const x = lista[0];
+  const r = info.get(`${x.tipo}:${x.tmdb_id}`) || {};
+  partes.sessao = `<a class="slide" href="#/${x.tipo}/${x.tmdb_id}" ${cores(r.titulo)}>${fundoDe(r.poster, 'w500')}
+    <div><div class="eyebrow">Sessão de vocês</div><div class="tt">${esc(r.titulo || 'Sem título')}</div><div class="s">${textoDe(x)}</div></div></a>`;
+  desenharDestaque(el);
 }
 
 /* ---------- data especial (tema do dia) ---------- */
@@ -138,7 +161,7 @@ async function dataEspecial(el) {
     const p = await tmdb.pessoa(d.pessoa);
     const vistos = p.creditos.filter((c) => dados.titulo(c.tipo, c.id).visto).length;
     const alvo = $('#conta-especial', el);
-    if (alvo) alvo.innerHTML = ` Você já viu <b style="font:inherit;font-weight:600;text-transform:none;letter-spacing:0">${vistos}</b> título${vistos === 1 ? '' : 's'} com <a href="#/pessoa/${p.id}">${esc(p.nome)}</a>.`;
+    if (alvo) alvo.innerHTML = ` Você já viu <b style="font:inherit;font-weight:600">${vistos}</b> título${vistos === 1 ? '' : 's'} com <a href="#/pessoa/${p.id}">${esc(p.nome)}</a>.`;
   } catch { /* sem a contagem */ }
 }
 
@@ -147,18 +170,13 @@ export function atualizar(el) {
   sessoesJuntos(el).catch(() => {});
   atividade(el).catch(() => {});
 }
+
 /* ---------- atividade de vocês dois ---------- */
-function linhaFeed(a) {
-  const quem = a.eu ? 'Você' : esc(a.nome);
-  let fez;
-  if (a.nota != null) fez = `deu <span class="selo">${notaMinha(a.nota)}</span> para`;
-  else if (a.visto) fez = 'viu';
-  else if (a.seguindo) fez = a.eu ? 'está acompanhando' : 'está acompanhando';
-  else if (a.curtido) fez = 'curtiu';
-  else fez = 'marcou';
-  return `<a class="li" href="#/${a.tipo}/${a.tmdb_id}">${poster(a, { tam: 'w154' })}
-    <div><div class="s"><b style="color:var(--fg)">${quem}</b> ${fez}</div><div class="t">${esc(a.titulo)}${a.curtido ? ' <span class="heart">♥</span>' : ''}</div>${a.review_em ? '<div class="s">escreveu review</div>' : ''}</div>
-    <span class="r">${new Date(a.atualizado_em).toLocaleDateString('pt-BR').slice(0, 5)}</span></a>`;
+function tileFeed(a) {
+  const quem = a.eu ? 'Você' : a.nome;
+  const fez = a.nota != null ? `<span class="selo">${notaMinha(a.nota)}</span>` : a.visto ? 'viu' : a.seguindo ? 'segue' : '';
+  return `<a class="tile" href="#/${a.tipo}/${a.tmdb_id}" aria-label="${esc(quem)}: ${esc(a.titulo)}">${poster(a)}
+    <span class="leg"><i class="av ${a.eu ? '' : 'ele'}">${esc(quem[0])}</i><span class="n">${esc(quem)}</span>${fez}${a.curtido ? '<span class="heart" aria-label="curtiu">♥</span>' : ''}</span></a>`;
 }
 
 async function atividade(el) {
@@ -167,35 +185,66 @@ async function atividade(el) {
   const itens = await social.feed(12);
   if (!$('#atividade', el) || !itens.length) return;
   s.hidden = false;
-  s.innerHTML = `<h2>Atividade <small>você e ${esc(nuvem.outro()?.nome || 'o outro')}</small></h2><div class="list">${itens.map(linhaFeed).join('')}</div>`;
+  s.innerHTML = `<h2>Atividade <small>você e ${esc(nuvem.outro()?.nome || 'o outro')}</small></h2><div class="row">${itens.map(tileFeed).join('')}</div>`;
+  atalhos(el);
+}
+
+/* ---------- atalhos: pulam para cada parte da tela ---------- */
+function atalhos(el) {
+  const alvo = $('#atalhos', el);
+  if (!alvo) return;
+  const lista = [['sessoes-juntos', 'Sessões'], ['atividade', 'Atividade'], ['em-andamento', 'Séries'], ['s-estreias', 'Estreias'], ['s-cartaz', 'Em cartaz'], ['s-alta', 'Em alta']]
+    .filter(([id]) => { const s = document.getElementById(id); return s && !s.hidden; });
+  alvo.innerHTML = lista.map(([id, n]) => `<button class="cap" data-ir="${id}">${n}</button>`).join('');
 }
 
 /* ---------- página ---------- */
+let altaTipo = 'filme';
+
 export function render(el) {
   if (!temChaves()) {
     semChaves(el);
     return;
   }
+  partes.dia = ''; partes.serie = ''; partes.sessao = '';
   el.innerHTML = `
     <section id="data-especial" hidden></section>
-    <section><h2>Filme do dia <small>muda todo dia, igual para os dois</small></h2><div id="do-dia"><div class="hero"><div class="poster skel" style="--a:transparent;--b:transparent"></div><div class="info"><div class="skel tit"></div><div class="skel txt"></div><div class="skel txt" style="width:60%"></div></div></div></div></section>
+    <section id="destaque"><div class="slide skel"></div></section>
+    <div class="caps" id="atalhos" role="group" aria-label="Ir para"></div>
     <section id="sessoes-juntos" hidden></section>
-    <section id="em-andamento" hidden></section>
     <section id="atividade" hidden></section>
-    <section><h2>Próximas estreias <small><a class="link" href="#/calendario/${hoje().slice(0, 7)}">ver calendário ›</a></small></h2><div id="estreias"><div class="skel txt"></div></div>
-      <p class="note">"Juntos" é a data sugerida para vocês verem: a primeira terça-feira a partir da estreia.</p></section>
-    <section><h2>Em cartaz no Brasil <small>juntos: ${dataCurta(proximaTerca(''))}</small></h2><div id="cartaz">${esqueleto()}</div></section>
-    <section><h2>Filmes em alta <small>esta semana</small></h2><div id="alta-filmes">${esqueleto()}</div></section>
-    <section><h2>Séries em alta <small>esta semana</small></h2><div id="alta-series">${esqueleto()}</div></section>
-    <p class="note">Este app usa a API do TMDB, mas não é endossado nem certificado pelo TMDB.</p>${carinha('inicio')}`;
+    <section id="em-andamento" hidden></section>
+    <section id="s-estreias"><h2>Próximas estreias <small><a class="link" href="#/calendario/${hoje().slice(0, 7)}">Calendário</a></small></h2><div id="estreias">${esqueleto()}</div></section>
+    <section id="s-cartaz"><h2>Em cartaz <small>juntos: ${dataCurta(proximaTerca(''))}</small></h2><div id="cartaz">${esqueleto()}</div></section>
+    <section id="s-alta"><h2>Em alta <span class="seg" role="group" aria-label="Filmes ou séries" style="flex:none"><button data-alta="filme" aria-pressed="${altaTipo === 'filme'}">Filmes</button><button data-alta="serie" aria-pressed="${altaTipo === 'serie'}">Séries</button></span></h2><div id="alta">${esqueleto()}</div></section>
+    <p class="note">"Juntos" é a primeira terça-feira a partir da estreia. O filme do dia é o mesmo para vocês dois. Este app usa a API do TMDB, mas não é endossado nem certificado pelo TMDB.</p>${carinha('inicio')}`;
+  atalhos(el);
   atualizar(el);
   dataEspecial(el).catch(() => {});
 
-  // toques nos cartões de série e nas sessões juntos
+  const erroTexto = (erro) => `<p class="note">${erro?.status === 401 ? 'A chave do TMDB foi recusada. Confira no Perfil.' : 'Não deu para carregar. Confira a internet.'}</p>`;
+  const por = (sel, promessa, desenha) => promessa.then((lista) => {
+    const alvo = $(sel, el);
+    if (alvo) alvo.innerHTML = lista.length ? desenha(lista) : '<p class="note">Nada por enquanto.</p>';
+  }).catch((erro) => {
+    const alvo = $(sel, el);
+    if (alvo) alvo.innerHTML = erroTexto(erro);
+  });
+  const fileira = (lista) => `<div class="row">${lista.slice(0, 18).map((c) => tile(c)).join('')}</div>`;
+
+  // toques: cartões de série, sessões juntos, atalhos e o seletor do "Em alta"
   el.onclick = async (e) => {
-    const b = e.target.closest('button[data-acao]');
+    const b = e.target.closest('button');
     if (!b) return;
-    if (b.dataset.acao === 'ver-ep') {
+    if (b.dataset.ir) {
+      document.getElementById(b.dataset.ir)?.scrollIntoView({ block: 'start', behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
+    } else if (b.dataset.alta) {
+      altaTipo = b.dataset.alta;
+      el.querySelectorAll('[data-alta]').forEach((x) => x.setAttribute('aria-pressed', x.dataset.alta === altaTipo));
+      $('#alta', el).innerHTML = esqueleto();
+      por('#alta', tmdb.emAlta(altaTipo), fileira);
+    } else if (b.dataset.acao === 'ver-ep') {
+      e.preventDefault();
       b.disabled = true;
       dados.marcarEpisodios(b.dataset.serie, [{ t: Number(b.dataset.t), e: Number(b.dataset.e) }], true);
       toast(`${cod(b.dataset.t, b.dataset.e)} visto`);
@@ -215,26 +264,12 @@ export function render(el) {
     }
   };
 
-  const erroTexto = (erro) => `<p class="note">${erro?.status === 401 ? 'A chave do TMDB foi recusada. Confira no Perfil.' : 'Não deu para carregar. Confira a internet.'}</p>`;
-  const por = (sel, promessa, desenha) => promessa.then((lista) => {
-    const alvo = $(sel, el);
-    if (alvo) alvo.innerHTML = lista.length ? desenha(lista) : '<p class="note">Nada por enquanto.</p>';
-  }).catch((erro) => {
-    const alvo = $(sel, el);
-    if (alvo) alvo.innerHTML = erroTexto(erro);
-  });
+  filmeDoDia().then((d) => { partes.dia = d ? slideDoDia(d) : ''; desenharDestaque(el); })
+    .catch((erro) => { const alvo = $('#destaque', el); if (alvo && !partes.serie && !partes.sessao) alvo.innerHTML = erroTexto(erro); });
 
-  filmeDoDia().then((d) => {
-    const alvo = $('#do-dia', el);
-    if (alvo) alvo.innerHTML = d ? cartaoDoDia(d) : '<p class="note">Sem sugestão hoje.</p>';
-  }).catch((erro) => { const alvo = $('#do-dia', el); if (alvo) alvo.innerHTML = erroTexto(erro); });
-
-  const fileira = (lista) => `<div class="row">${lista.slice(0, 18).map((c) => tile(c)).join('')}</div>`;
-  por('#estreias', tmdb.estreias(), (lista) => `<div class="list">${lista.slice(0, 6).map((c) => `
-    <a class="li" href="${link(c)}">${poster(c, { tam: 'w154' })}
-      <div><div class="t">${esc(c.titulo)}</div><div class="s">Estreia ${dataCurta(c.data)} · ${contagem(c.data)}${avisos.pediuAviso(c.id) ? ' · aviso ligado' : ''}</div></div>
-      <span class="r">juntos<br><b class="junto">${dataCurta(proximaTerca(c.data))}</b></span></a>`).join('')}</div>`);
+  por('#estreias', tmdb.estreias(), (lista) => `<div class="row">${lista.slice(0, 12).map((c) => `
+    <a class="tile" href="${link(c)}" aria-label="${esc(c.titulo)}, estreia ${dataCurta(c.data)}">${poster(c).replace(/<\/div>$/, `<span class="dia">${dataCurta(c.data)}</span></div>`)}
+      <span class="leg"><span class="n">juntos <span class="junto">${dataCurta(proximaTerca(c.data))}</span>${avisos.pediuAviso(c.id) ? ' · aviso' : ''}</span></span></a>`).join('')}</div>`);
   por('#cartaz', tmdb.emCartaz(), fileira);
-  por('#alta-filmes', tmdb.emAlta('filme'), fileira);
-  por('#alta-series', tmdb.emAlta('serie'), fileira);
+  por('#alta', tmdb.emAlta(altaTipo), fileira);
 }

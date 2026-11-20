@@ -188,7 +188,7 @@ export async function render(el) {
   const topo = (numeros) => `
   <section style="align-items:center;text-align:center;gap:10px">
     ${ehMeu ? (carinha('perfil', 'lg') || avatar(pessoa)) : avatar(pessoa)}
-    <div style="font-family:var(--display);font-size:24px;font-weight:600">${esc(pessoa.nome)}</div>
+    <div style="font-size:24px;font-weight:800;letter-spacing:-.02em">${esc(pessoa.nome)}</div>
     ${o ? `<div class="seg" role="group" aria-label="Perfil"><button data-ver="" aria-pressed="${ehMeu}">Você</button><button data-ver="${o.id}" aria-pressed="${!ehMeu}">${esc(o.nome)}${o.ativo ? '' : ' (ainda não entrou)'}</button></div>` : ''}
     <div class="pstats">${numeros}</div>
     ${u ? '' : '<p class="note">Sem login, estes números são só deste aparelho.</p>'}

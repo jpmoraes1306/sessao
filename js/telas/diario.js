@@ -6,7 +6,7 @@ import * as nuvem from '../nuvem.js';
 import { carinha } from '../ovo.js';
 import { esc, selo, poster } from '../ui.js';
 
-const MES = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
+const DIAS = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb'];
 const MESL = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
 const POR_VEZ = 150;
 let vez = 0;
@@ -18,7 +18,7 @@ function desenhar(el, entradas, { temMais = false, vazio = '' } = {}) {
   el.innerHTML = `${Object.keys(grupos).map((k) => {
     const [a, m] = k.split('-');
     return `<section><h2>${MESL[m - 1]} ${a} <small>${grupos[k].length} título${grupos[k].length > 1 ? 's' : ''}</small></h2><div class="list">${grupos[k].map((t) => `
-      <a class="li" href="#/${t.tipo}/${t.id}" style="grid-template-columns:36px 44px 1fr auto"><div class="date">${Number(t.data.slice(8))}<small>${MES[m - 1]}</small></div>${poster(t, { tam: 'w154' })}
+      <a class="li" href="#/${t.tipo}/${t.id}" style="grid-template-columns:34px 42px 1fr auto"><div class="date">${Number(t.data.slice(8))}<small>${DIAS[new Date(`${t.data.slice(0, 10)}T12:00:00`).getDay()]}</small></div>${poster(t, { tam: 'w154' })}
         <div><div class="t">${esc(t.titulo)}</div><div class="s">${[t.ano, t.tipo === 'serie' ? 'série' : '', t.revisto ? 'revisto' : ''].filter(Boolean).join(' · ')}</div></div>
         <span class="r">${selo(t.nota)}${t.curtido ? ' <span class="heart">♥</span>' : ''}</span></a>`).join('')}</div></section>`;
   }).join('') || vazio}

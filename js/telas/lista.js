@@ -49,7 +49,7 @@ export async function render(el) {
   if (!logado && filtro.lista !== 'minha') filtro.lista = 'minha';
   const LISTAS = [['minha', 'Minha'], ...(o ? [['dele', o.nome]] : []), ...(logado ? [['juntos', 'Juntos']] : []), ...(o ? [['mix', 'Mix']] : [])];
   const seletor = LISTAS.length > 1 ? `<div class="seg" role="group" aria-label="Lista">${LISTAS.map(([k, r]) => `<button data-lista="${k}" aria-pressed="${filtro.lista === k}">${esc(r)}</button>`).join('')}</div>` : '';
-  const moldura = (miolo, resumo = '') => `<section><h2><span>Quero ver ${carinha('lista')}</span><small>${resumo}</small></h2>${seletor}${miolo}</section>`;
+  const moldura = (miolo, resumo = '') => `<section>${seletor}${resumo || carinha('lista') ? `<p class="sub2">${resumo}${carinha('lista')}</p>` : ''}${miolo}</section>`;
   const esperando = (texto) => { el.innerHTML = moldura(`<div class="card"><p>${texto}</p><div class="lbar-big"><i id="andamento-filtro" style="width:5%"></i></div></div>`); ligar(); };
 
   function ligar() {
@@ -122,10 +122,10 @@ export async function render(el) {
   el.innerHTML = moldura(`
     ${semFiltro ? `<div class="filtros">
       <label>Ordenar<select name="ordem">${opcoes(ehMix ? [['recentes', 'Ordem do Mix'], ...ORDENS.slice(1)] : ORDENS, filtro.ordem)}</select></label>
-      <label>Gênero<select name="genero">${opcoes([['', 'Todos'], ...generos.map((g) => [g, g])], filtro.genero)}</select></label>
-      <label>Ano<select name="epoca">${opcoes([['', 'Todos'], ...decadas.map((d) => [d, `Anos ${d}`])], filtro.epoca)}</select></label>
-    </div>
-    <div class="seg"><button data-meus aria-pressed="${filtro.meus}">Só nos meus streamings</button></div>${explica}
+      <label>Gênero<select name="genero">${opcoes([['', 'Todos os gêneros'], ...generos.map((g) => [g, g])], filtro.genero)}</select></label>
+      <label>Ano<select name="epoca">${opcoes([['', 'Todas as décadas'], ...decadas.map((d) => [d, `Anos ${d}`])], filtro.epoca)}</select></label>
+      <button data-meus aria-pressed="${filtro.meus}">Meus streamings</button>
+    </div>${explica}
     ${itens.length ? `<div class="grid3">${itens.slice(0, 300).map((t) => tile(t, sob(t))).join('')}</div>${itens.length > 300 ? `<p class="note">Mostrando 300 de ${itens.length}. Use os filtros para ver o resto.</p>` : ''}`
       : `<p class="note">${filtro.meus && !todos.length ? 'Nada desta lista está nos seus streamings agora.' : 'Nenhum título com esse filtro.'}</p>`}`
     : VAZIO[filtro.lista]}

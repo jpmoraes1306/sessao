@@ -3,9 +3,9 @@ import * as tmdb from '../tmdb.js';
 import * as omdb from '../omdb.js';
 import * as dados from '../dados.js';
 import * as nuvem from '../nuvem.js';
-import { blocoDupla, botoesExtras, tocarExtra, montarReviews, montarCuriosidades } from './comum.js';
+import { grupoSocial, tocarExtra, montarReviews, montarCuriosidades } from './comum.js';
 import { carinha } from '../ovo.js';
-import { $, esc, nota, notaMinha, selo, blocoNota, poster, headshot, tile, blocoNotas, blocoProvedores, blocoReviews, erroFicha, toast, perguntar, dataCurta, contagem, hoje, corDe, IC } from '../ui.js';
+import { $, esc, nota, notaMinha, selo, blocoNota, ligarReguas, poster, headshot, tile, blocoNotas, blocoProvedores, blocoReviews, erroFicha, toast, perguntar, dataCurta, contagem, hoje, corDe, IC } from '../ui.js';
 import { img } from '../tmdb.js';
 import { secaoPremios, classificacao } from './filme.js';
 
@@ -89,8 +89,7 @@ export async function abrir(el, id, ctx) {
       <button class="act like ${m.curtido ? 'on' : ''}" data-acao="curtir">${IC.coracao}${m.curtido ? 'Curtida' : 'Curtir'}</button>
       <button class="act list ${m.quero ? 'on' : ''}" data-acao="quero">${IC.relogio}${m.quero ? 'Na lista' : 'Quero ver'}</button>
     </div>
-    ${blocoNota(m.nota, 'Sua nota para a série', 'data-alvo="serie"')}
-    ${botoesExtras(meta)}`;
+    ${blocoNota(m.nota, 'Sua nota', 'data-alvo="serie"')}`;
   };
   const notas = () => blocoNotas(meu().nota, s.nota, notasFora, carregandoNotas);
 
@@ -186,7 +185,7 @@ export async function abrir(el, id, ctx) {
   function redesenhar() {
     $('#acoes', el).innerHTML = acoes();
     $('#notas', el).innerHTML = notas();
-    $('#dupla', el).innerHTML = blocoDupla('serie', s.id);
+    $('#dupla', el).innerHTML = grupoSocial(meta);
     $('#progresso', el).innerHTML = progresso();
     $('#temporadas', el).innerHTML = temporadas();
   }
@@ -208,10 +207,10 @@ export async function abrir(el, id, ctx) {
    <div class="wrap">
     <div class="head"><div style="min-width:0"><h1>${esc(s.titulo)}</h1>
       <div class="sub">${linhaSub}${s.tituloBR ? `<br><span class="br">No Brasil: ${esc(s.tituloBR)}</span>` : ''}</div></div>${poster(s, { lg: true })}</div>
-    ${s.sinopse ? `<p class="syn clamp">${esc(s.sinopse)}</p><button class="mais" data-acao="abrir-texto">ler tudo</button>` : '<p class="note">Sem sinopse no TMDB.</p>'}
-    <div id="acoes" style="display:flex;flex-direction:column;gap:12px">${acoes()}</div>
     <div class="scores" id="notas">${notas()}</div>
-    <div id="dupla">${blocoDupla('serie', s.id)}</div>
+    <div id="acoes" style="display:flex;flex-direction:column;gap:22px">${acoes()}</div>
+    <div id="dupla">${grupoSocial(meta)}</div>
+    ${s.sinopse ? `<section class="sinopse"><p class="syn clamp">${esc(s.sinopse)}</p><button class="mais" data-acao="abrir-texto">Ler mais</button></section>` : '<p class="note">Sem sinopse no TMDB.</p>'}
     <section><h2>Seu progresso</h2><div id="progresso">${progresso()}</div></section>
     <section><h2>Temporadas <small>toque para ver os episódios</small></h2><div id="temporadas">${temporadas()}</div>
       ${nuvem.usuario() ? '' : '<p class="note">Sem login, o que você marca fica salvo só neste aparelho.</p>'}</section>
@@ -231,6 +230,26 @@ export async function abrir(el, id, ctx) {
   /* ----- toques ----- */
   const acompanhar = () => { if (!meu().seguindo) dados.marcar(meta, { seguindo: true, quero: false }); };
 
+  // nota de 0 a 10 da série, da temporada ou do episódio (r = null tira a nota); `alvo` são os data-* do bloco
+  async function darNota(r, alvo) {
+    if (alvo.alvo === 'serie') {
+      dados.marcar(meta, { nota: r });
+      toast(r == null ? 'Nota removida' : `Nota ${notaMinha(r)} salva`);
+    } else if (alvo.alvo === 'temporada') {
+      dados.darNotaTemporada(s.id, Number(alvo.t), r);
+      toast(r == null ? 'Nota removida' : `Temporada ${alvo.t}: nota ${notaMinha(r)}`);
+    } else {
+      const k = `${alvo.t}x${alvo.e}`;
+      const eraNovo = !vistos()[k];
+      dados.darNotaEpisodio(s.id, Number(alvo.t), Number(alvo.e), r);
+      acompanhar();
+      toast(r == null ? 'Nota removida' : `${cod(alvo.t, alvo.e)}: nota ${notaMinha(r)}`);
+      if (eraNovo) { redesenhar(); await oferecerAnteriores(Number(alvo.t), Number(alvo.e)); prepararProximo(); return; }
+    }
+    redesenhar();
+  }
+  ligarReguas(el, (r, regua) => darNota(r, regua.closest('.rate').dataset));
+
   el.onclick = async (e) => {
     const t = e.target.closest('button');
     if (!t) return;
@@ -238,28 +257,8 @@ export async function abrir(el, id, ctx) {
     const m = meu();
     if (await tocarExtra(acao, meta, t)) { redesenhar(); return; }
 
-    if (t.dataset.r != null) { // nota de 0 a 10: da série, da temporada ou do episódio
-      const r = Number(t.dataset.r);
-      const alvo = t.closest('.rate').dataset;
-      if (alvo.alvo === 'serie') {
-        const tirar = m.nota === r;
-        dados.marcar(meta, { nota: tirar ? null : r });
-        toast(tirar ? 'Nota removida' : `Nota ${notaMinha(r)} salva`);
-      } else if (alvo.alvo === 'temporada') {
-        const atual = dados.notaTemporada(s.id, Number(alvo.t));
-        dados.darNotaTemporada(s.id, Number(alvo.t), atual === r ? null : r);
-        toast(atual === r ? 'Nota removida' : `Temporada ${alvo.t}: nota ${notaMinha(r)}`);
-      } else {
-        const k = `${alvo.t}x${alvo.e}`;
-        const atual = vistos()[k]?.r;
-        const eraNovo = !vistos()[k];
-        dados.darNotaEpisodio(s.id, Number(alvo.t), Number(alvo.e), atual === r ? null : r);
-        acompanhar();
-        toast(atual === r ? 'Nota removida' : `${cod(alvo.t, alvo.e)}: nota ${notaMinha(r)}`);
-        if (eraNovo) { redesenhar(); await oferecerAnteriores(Number(alvo.t), Number(alvo.e)); prepararProximo(); return; }
-      }
-      redesenhar();
-    } else if (acao === 'seguir') {
+    if (t.dataset.r === 'tirar') { await darNota(null, t.closest('.rate').dataset); return; }
+    if (acao === 'seguir') {
       dados.marcar(meta, { seguindo: !m.seguindo, ...(m.seguindo ? {} : { quero: false }) });
       toast(m.seguindo ? 'Você deixou de acompanhar' : 'Acompanhando a série');
       redesenhar();

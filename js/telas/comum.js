@@ -4,16 +4,16 @@ import * as nuvem from '../nuvem.js';
 import * as dados from '../dados.js';
 import * as social from '../social.js';
 import * as curiosidades from '../curiosidades.js';
-import { $, esc, nota, notaMinha, dataBR, dataCurta, proximaTerca, toast, corDe } from '../ui.js';
+import { $, esc, nota, notaMinha, dataBR, dataCurta, proximaTerca, toast, corDe, SETA } from '../ui.js';
 
 const avatar = (p) => {
   const [a, b] = corDe(p.nome);
   return `<span class="ph sm" style="--a:${a};--b:${b}">${esc((p.nome || '?')[0])}${p.foto ? `<img src="${esc(p.foto)}" alt="" referrerpolicy="no-referrer" onerror="this.remove()">` : ''}</span>`;
 };
 
-/** Linha "Thiago deu 8" (sempre visível, só para consulta) + a média de vocês dois. */
-export function blocoDupla(tipo, id) {
-  const o = nuvem.usuario() && nuvem.outro();
+/** Linha "Thiago deu 8" (só para consulta), com a média de vocês dois quando os dois deram nota. */
+function linhaDoOutro(tipo, id) {
+  const o = nuvem.outro();
   if (!o) return '';
   const dele = social.doOutro(tipo, id);
   const minha = dados.titulo(tipo, id).nota;
@@ -21,30 +21,33 @@ export function blocoDupla(tipo, id) {
   if (dele?.nota != null) frase = `deu <span class="selo">${notaMinha(dele.nota)}</span>${dele.curtido ? ' <span class="heart">♥</span>' : ''}${dele.temReview ? ' · escreveu review' : ''}`;
   else if (dele?.visto) frase = `viu, sem nota${dele.curtido ? ' <span class="heart">♥</span>' : ''}`;
   else if (dele?.seguindo) frase = 'está acompanhando';
-  else if (dele?.quer) frase = '<span style="color:var(--list)">quer ver</span>';
-  else frase = `ainda não ${tipo === 'serie' ? 'viu' : 'viu'}`;
-  const media = minha != null && dele?.nota != null ? `<span class="media">média de vocês <b>${nota((minha + dele.nota) / 2)}</b></span>` : '';
-  return `<div class="dupla">${avatar(o)}<div><b>${esc(o.nome)}</b> ${frase}</div>${media}</div>`;
+  else if (dele?.quer) frase = 'também quer ver';
+  else frase = 'ainda não viu';
+  const media = minha != null && dele?.nota != null ? `<span class="media">média de vocês ${nota((minha + dele.nota) / 2)}</span>` : '';
+  return `<div class="lin">${avatar(o)}<span class="n">${esc(o.nome)}</span><span class="det">${frase}${media}</span></div>`;
 }
 
-/** Botões "Queremos ver juntos" e "Favorito" (só com login). */
-export function botoesExtras(meta, opc = {}) {
+/**
+ * Grupo "vocês dois" da ficha (só com login): a nota do outro, a chave "Queremos ver juntos",
+ * a chave de favorito e, nos filmes, a sessão para verem juntos (regra da terça).
+ */
+export function grupoSocial(meta, opc = {}) {
   if (!nuvem.usuario()) return '';
   const j = social.estaEmJuntos(meta.tipo, meta.id);
   const f = dados.ehFavorito(meta.tipo, meta.id);
-  // sessão para verem juntos: a data sugerida é a primeira terça a partir da estreia (ou de hoje)
   let sessao = '';
   if (meta.tipo === 'filme' && nuvem.outro()) {
     const x = social.sessaoDe(meta.tipo, meta.id);
     const terca = proximaTerca(opc.estreia || '');
-    if (!x) sessao = `<button class="btn small" data-acao="sessao" data-data="${terca}">Marcar sessão: ${dataCurta(terca)}</button>`;
-    else if (social.estadoDaSessao(x) === 'futura') sessao = `<button class="btn small on-list" data-acao="cancelar-sessao">✓ Sessão ${dataCurta(x.data)} · cancelar</button>`;
-    else sessao = `<button class="btn small on-seen" data-acao="vimos-juntos">${social.estadoDaSessao(x) === 'confirmar' ? 'Confirmar que vi junto' : 'Vimos juntos'} · ${dataCurta(x.data)}</button>`;
+    if (!x) sessao = `<button class="lin" data-acao="sessao" data-data="${terca}"><span class="n">Marcar sessão juntos</span><span class="det">${dataCurta(terca)}</span>${SETA}</button>`;
+    else if (social.estadoDaSessao(x) === 'futura') sessao = `<button class="lin" data-acao="cancelar-sessao"><span class="n">Sessão marcada<small>Toque para cancelar</small></span><span class="det ok">${dataCurta(x.data)}</span></button>`;
+    else sessao = `<button class="lin" data-acao="vimos-juntos"><span class="n">${social.estadoDaSessao(x) === 'confirmar' ? 'Confirmar que vi junto' : 'Vimos juntos'}</span><span class="det">${dataCurta(x.data)}</span>${SETA}</button>`;
   }
-  return `<div class="actions"><button class="btn small ${j ? 'on-list' : ''}" data-acao="juntos">${j ? '✓ Na lista "juntos"' : '+ Queremos ver juntos'}</button>
-    <button class="btn small ${f ? 'on-star' : ''}" data-acao="favorito">${f ? '★ Nos seus favoritos' : '☆ Favorito'}</button>${sessao}</div>`;
+  return `<div class="grupo">${linhaDoOutro(meta.tipo, meta.id)}
+    <button class="lin" data-acao="juntos" role="switch" aria-checked="${j}"><span class="n">Queremos ver juntos<small>Entra na lista Juntos, do Quero ver</small></span><span class="chave${j ? ' on' : ''}"></span></button>
+    <button class="lin" data-acao="favorito" role="switch" aria-checked="${f}"><span class="n">Nos meus favoritos<small>Até 4, aparecem no seu perfil</small></span><span class="chave${f ? ' on' : ''}"></span></button>
+    ${sessao}</div>`;
 }
-
 /** Trata os toques nos botões extras. Devolve true se o toque era de um deles. */
 export async function tocarExtra(acao, meta, botao) {
   if (acao === 'sessao') {

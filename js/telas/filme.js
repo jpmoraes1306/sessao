@@ -5,9 +5,9 @@ import * as wikidata from '../wikidata.js';
 import * as dados from '../dados.js';
 import * as nuvem from '../nuvem.js';
 import * as avisos from '../avisos.js';
-import { blocoDupla, botoesExtras, tocarExtra, montarReviews, montarCuriosidades } from './comum.js';
+import { grupoSocial, tocarExtra, montarReviews, montarCuriosidades } from './comum.js';
 import { carinha } from '../ovo.js';
-import { $, esc, nota, notaMinha, selo, blocoNota, poster, headshot, tile, linha, blocoNotas, blocoProvedores, blocoReviews, erroFicha, toast, duracao, dataCurta, proximaTerca, dolares, hoje, corDe, IC } from '../ui.js';
+import { $, esc, nota, notaMinha, selo, blocoNota, ligarReguas, poster, headshot, tile, linha, blocoNotas, blocoProvedores, blocoReviews, erroFicha, toast, duracao, dataCurta, proximaTerca, dolares, hoje, corDe, IC } from '../ui.js';
 import { img } from '../tmdb.js';
 
 export const classificacao = (c) => (c ? (c === 'L' ? 'Livre' : /^\d+$/.test(c) ? `${c} anos` : c) : '');
@@ -93,9 +93,9 @@ export async function abrir(el, id, ctx) {
       <button class="act like ${m.curtido ? 'on' : ''}" data-acao="curtir">${IC.coracao}${m.curtido ? 'Curtido' : 'Curtir'}</button>
       <button class="act list ${m.quero ? 'on' : ''}" data-acao="quero">${IC.relogio}${m.quero ? 'Na lista' : 'Quero ver'}</button>
     </div>
-    ${blocoNota(m.nota)}
-    ${botoesExtras(meta, { estreia: noCinema ? estreia : '' })}`;
+    ${blocoNota(m.nota)}`;
   };
+  const social = () => grupoSocial(meta, { estreia: noCinema ? estreia : '' });
   const notas = () => blocoNotas(meu().nota, f.nota, notasFora, carregandoNotas);
 
   function dinheiro() {
@@ -124,15 +124,14 @@ export async function abrir(el, id, ctx) {
    <div class="wrap">
     <div class="head"><div style="min-width:0"><h1>${esc(f.titulo)}</h1>
       <div class="sub">${linhaSub}${f.tituloBR ? `<br><span class="br">No Brasil: ${esc(f.tituloBR)}</span>` : ''}${f.original !== f.titulo ? `<br><span class="br">Título original: ${esc(f.original)}</span>` : ''}</div></div>${poster(f, { lg: true })}</div>
-    ${f.frase ? `<p class="tagline">${esc(f.frase)}</p>` : ''}
-    ${f.sinopse ? `<p class="syn">${esc(f.sinopse)}</p>${f.sinopseIdioma === 'en' ? '<p class="note" style="margin-top:-14px">Sinopse ainda sem tradução no TMDB.</p>' : ''}` : '<p class="note">Sem sinopse no TMDB.</p>'}
+    <div class="scores" id="notas">${notas()}</div>
+    <div id="acoes" style="display:flex;flex-direction:column;gap:22px">${acoes()}</div>
+    <div id="dupla">${social()}</div>
+    ${nuvem.usuario() ? '' : '<p class="note" style="margin-top:-12px">Sem login, o que você marca fica salvo só neste aparelho.</p>'}
+    ${f.sinopse ? `<section class="sinopse"><p class="syn clamp">${esc(f.sinopse)}</p><button class="mais" data-acao="abrir-texto">Ler mais</button>${f.sinopseIdioma === 'en' ? '<p class="note">Sinopse ainda sem tradução no TMDB.</p>' : ''}</section>` : '<p class="note">Sem sinopse no TMDB.</p>'}
     ${noCinema ? `<div class="terca"><span class="eyebrow">Para verem juntos</span>
       <div>${aindaNaoSaiu || haDias < 0 ? `Estreia no Brasil ${dataCurta(estreia)}.` : `Em cartaz desde ${dataCurta(estreia)}.`} Terça sugerida: <b>${dataCurta(terca)}</b>.</div>
       ${haDias < 0 && nuvem.usuario() ? `<div class="actions" style="margin-top:6px" id="aviso-estreia"><button class="btn small ${avisos.pediuAviso(f.id) ? 'on-seen' : ''}" data-acao="avisar-estreia">${avisos.pediuAviso(f.id) ? '✓ Aviso ligado para a estreia' : 'Avisar na estreia'}</button></div>` : ''}</div>` : ''}
-    <div id="acoes" style="display:flex;flex-direction:column;gap:12px">${acoes()}</div>
-    <div class="scores" id="notas">${notas()}</div>
-    <div id="dupla">${blocoDupla('filme', f.id)}</div>
-    ${nuvem.usuario() ? '' : '<p class="note" style="margin-top:-12px">Sem login, o que você marca fica salvo só neste aparelho.</p>'}
     ${f.elenco.length || f.diretores.length ? `<section><h2>Elenco e direção <small>toque para ver os filmes</small></h2><div class="heads">${f.diretores.map((d) => headshot(d, 'Direção')).join('')}${f.elenco.map((p) => headshot(p, p.papel)).join('')}</div></section>` : ''}
     <section><h2>Onde assistir <small>no Brasil</small></h2>${blocoProvedores(f.provedores)}</section>
     <section id="dinheiro">${dinheiro()}</section>
@@ -145,11 +144,20 @@ export async function abrir(el, id, ctx) {
     <p class="note">Dados e imagens: TMDB. Notas IMDb, Rotten Tomatoes e Metacritic: OMDb. Prêmios: OMDb e Wikidata.</p>${carinha('ficha')}
    </div>`;
 
+  // a sinopse curta não precisa do "Ler mais"
+  const syn = $('.syn', el);
+  if (syn && syn.scrollHeight <= syn.clientHeight + 2) { syn.classList.remove('clamp'); syn.nextElementSibling?.remove(); }
+
   const atualizar = () => {
     $('#acoes', el).innerHTML = acoes();
-    $('#notas', el).innerHTML = notas();
-    $('#dupla', el).innerHTML = blocoDupla('filme', f.id);
+    $('#dupla', el).innerHTML = social();
   };
+  const gravarNota = (r) => { // r = null tira a nota
+    dados.marcar(meta, r == null ? { nota: null } : { nota: r, visto: true, quero: false });
+    toast(r == null ? 'Nota removida' : `Nota ${notaMinha(r)} salva`);
+    atualizar();
+  };
+  ligarReguas(el, gravarNota);
   el.onclick = async (e) => {
     const t = e.target.closest('button');
     if (!t) return;
@@ -162,12 +170,8 @@ export async function abrir(el, id, ctx) {
       return;
     }
     if (await tocarExtra(t.dataset.acao, meta, t)) { atualizar(); return; }
-    if (t.dataset.r != null) {
-      const r = Number(t.dataset.r);
-      const tirar = m.nota === r;
-      dados.marcar(meta, tirar ? { nota: null } : { nota: r, visto: true, quero: false });
-      toast(tirar ? 'Nota removida' : `Nota ${notaMinha(r)} salva`);
-    } else if (t.dataset.acao === 'visto') {
+    if (t.dataset.r === 'tirar') { gravarNota(null); return; }
+    if (t.dataset.acao === 'visto') {
       dados.marcar(meta, m.visto ? { visto: false, nota: null } : { visto: true, quero: false });
       toast(m.visto ? 'Tirado dos vistos' : 'Marcado como visto');
     } else if (t.dataset.acao === 'curtir') {
