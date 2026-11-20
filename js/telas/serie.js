@@ -3,7 +3,7 @@ import * as tmdb from '../tmdb.js';
 import * as omdb from '../omdb.js';
 import * as dados from '../dados.js';
 import * as nuvem from '../nuvem.js';
-import { grupoSocial, tocarExtra, montarReviews, montarCuriosidades } from './comum.js';
+import { grupoSocial, botaoRever, tocarExtra, montarReviews, montarCuriosidades } from './comum.js';
 import { carinha } from '../ovo.js';
 import { $, esc, nota, notaMinha, selo, blocoNota, ligarReguas, poster, elencoJunto, tile, blocoNotas, blocoProvedores, blocoReviews, erroFicha, toast, perguntar, dataCurta, contagem, hoje, corDe, IC } from '../ui.js';
 import { img } from '../tmdb.js';
@@ -89,7 +89,8 @@ export async function abrir(el, id, ctx) {
       <button class="act like ${m.curtido ? 'on' : ''}" data-acao="curtir">${IC.coracao}${m.curtido ? 'Curtida' : 'Curtir'}</button>
       <button class="act list ${m.quero ? 'on' : ''}" data-acao="quero">${IC.relogio}${m.quero ? 'Na lista' : 'Quero ver'}</button>
     </div>
-    ${blocoNota(m.nota, 'Sua nota', 'data-alvo="serie"')}`;
+    ${blocoNota(m.nota, 'Sua nota', 'data-alvo="serie"')}
+    ${botaoRever(m)}`;
   };
   const notas = () => blocoNotas(meu().nota, s.nota, notasFora, carregandoNotas);
 
@@ -168,7 +169,7 @@ export async function abrir(el, id, ctx) {
       <button class="meio" data-acao="episodio" data-k="${k}">
         <div class="ep-cod">${cod(t, e.n)}${e.duracao ? ` · ${e.duracao}m` : ''}${e.final ? ' · final' : ''}</div>
         <div class="ep-nome">${esc(e.nome)}</div>
-        <div class="ep-data">${e.data ? (futuro ? `estreia ${dataCurta(e.data)}` : dataCurta(e.data)) : 'sem data'}${reg?.r != null ? ` · sua nota ${selo(reg.r)}` : ''}</div>
+        <div class="ep-data">${e.data ? (futuro ? `estreia ${dataCurta(e.data)}` : dataCurta(e.data)) : 'sem data'}${reg?.r != null ? ` · sua nota ${selo(reg.r)}` : ''}${reg?.v > 1 ? ` · <span class="rev" title="Visto ${reg.v} vezes">${IC.rever}${reg.v}×</span>` : ''}</div>
       </button>
       <div class="ep-b">
         <button class="ic ${reg ? 'on' : ''}" data-acao="ver" data-t="${t}" data-e="${e.n}" ${futuro ? 'disabled' : ''} aria-label="${reg ? 'Desmarcar' : 'Marcar como visto'}" aria-pressed="${Boolean(reg)}">${IC.olho}</button>
@@ -176,6 +177,7 @@ export async function abrir(el, id, ctx) {
       </div>
       ${aberto ? `<div class="ep-x">${e.sinopse ? `<p>${esc(e.sinopse)}</p>` : '<p>Sem sinopse no TMDB.</p>'}
         ${futuro ? '' : blocoNota(reg?.r, 'Sua nota para o episódio', `data-alvo="episodio" data-t="${t}" data-e="${e.n}"`)}
+        ${reg ? `<div class="actions" style="align-items:center"><button class="btn small rever" data-acao="rever-ep" data-t="${t}" data-e="${e.n}">${IC.rever}Vi de novo</button>${reg.v > 1 ? `<span class="note">Visto ${reg.v} vezes</span><button class="texto" data-acao="rever-ep-menos" data-t="${t}" data-e="${e.n}">tirar uma</button>` : ''}</div>` : ''}
         ${e.nota && e.votos ? `<p class="note">Média no TMDB: ${nota(e.nota)} (${e.votos} voto${e.votos > 1 ? 's' : ''})</p>` : ''}</div>` : ''}
     </div>`;
   }
@@ -258,6 +260,12 @@ export async function abrir(el, id, ctx) {
     if (await tocarExtra(acao, meta, t)) { redesenhar(); return; }
 
     if (t.dataset.r === 'tirar') { await darNota(null, t.closest('.rate').dataset); return; }
+    if (acao === 'rever-ep' || acao === 'rever-ep-menos') {
+      const v = dados.reverEpisodio(s.id, Number(t.dataset.t), Number(t.dataset.e), acao === 'rever-ep' ? 1 : -1);
+      toast(acao === 'rever-ep' ? `${cod(t.dataset.t, t.dataset.e)}: visto ${v} vezes` : `${cod(t.dataset.t, t.dataset.e)}: ${v > 1 ? `visto ${v} vezes` : 'visto uma vez'}`);
+      redesenhar();
+      return;
+    }
     if (acao === 'seguir') {
       dados.marcar(meta, { seguindo: !m.seguindo, ...(m.seguindo ? {} : { quero: false }) });
       toast(m.seguindo ? 'Você deixou de acompanhar' : 'Acompanhando a série');

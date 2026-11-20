@@ -5,7 +5,7 @@ import * as wikidata from '../wikidata.js';
 import * as dados from '../dados.js';
 import * as nuvem from '../nuvem.js';
 import * as avisos from '../avisos.js';
-import { grupoSocial, tocarExtra, montarReviews, montarCuriosidades } from './comum.js';
+import { grupoSocial, botaoRever, tocarExtra, montarReviews, montarCuriosidades } from './comum.js';
 import { carinha } from '../ovo.js';
 import { $, esc, nota, notaMinha, selo, blocoNota, ligarReguas, poster, elencoJunto, tile, linha, blocoNotas, blocoProvedores, blocoReviews, erroFicha, toast, duracao, dataCurta, proximaTerca, dolares, hoje, corDe, IC } from '../ui.js';
 import { img } from '../tmdb.js';
@@ -93,7 +93,8 @@ export async function abrir(el, id, ctx) {
       <button class="act like ${m.curtido ? 'on' : ''}" data-acao="curtir">${IC.coracao}${m.curtido ? 'Curtido' : 'Curtir'}</button>
       <button class="act list ${m.quero ? 'on' : ''}" data-acao="quero">${IC.relogio}${m.quero ? 'Na lista' : 'Quero ver'}</button>
     </div>
-    ${blocoNota(m.nota)}`;
+    ${blocoNota(m.nota)}
+    ${botaoRever(m)}`;
   };
   const social = () => grupoSocial(meta);
   const notas = () => blocoNotas(meu().nota, f.nota, notasFora, carregandoNotas);

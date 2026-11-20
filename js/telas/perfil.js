@@ -9,7 +9,7 @@ import { carinha, dicaDeHoje } from '../ovo.js';
 import { chave, salvarChaves, MEUS_STREAMINGS, SERVICOS } from '../config.js';
 import * as avisos from '../avisos.js';
 import { limpar as limparCache } from '../cache.js';
-import { $, esc, nota, notaMinha, selo, tile, poster, toast, corDe, hoje } from '../ui.js';
+import { $, esc, nota, notaMinha, selo, tile, poster, toast, corDe, hoje, folha } from '../ui.js';
 
 const mascara = (k) => (k ? `${'•'.repeat(Math.max(0, k.length - 4))}${k.slice(-4)}` : '');
 let vendo = null;   // id do perfil na tela (null = o seu)
@@ -78,10 +78,43 @@ function estatisticas({ vistos, diario, res }) {
   };
 }
 
-const barras = (lista, cor = 'var(--seen)') => {
+// cada barra é um botão: tocar abre a folha com os títulos daquela barra (ver abrirGrafico)
+const barras = (lista, cor = 'var(--seen)', graf = '') => {
   const max = Math.max(...lista.map((x) => x[1]), 1);
-  return `<div class="barras">${lista.map(([rotulo, n]) => `<div class="barra"><span>${esc(rotulo)}</span><i style="width:${(n / max) * 100}%;background:${cor}"></i><b>${n}</b></div>`).join('')}</div>`;
+  return `<div class="barras">${lista.map(([rotulo, n, v = rotulo]) => `<button class="barra" data-graf="${graf}" data-v="${esc(v)}" aria-label="${esc(rotulo)}: ${n}. Toque para ver quais."><span>${esc(rotulo)}</span><i style="width:${(n / max) * 100}%;background:${cor}"></i><b>${n}</b></button>`).join('')}</div>`;
 };
+const MESL = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
+let grafico = null; // { d, e } do perfil que está na tela, para os toques nos gráficos
+
+/** Folha com os títulos de uma barra: nota, mês do ano, gênero ou década. */
+function abrirGrafico(tipo, v) {
+  const { d, e } = grafico;
+  const linhaDe = (t, extra = '') => {
+    const r = d.res(t.tipo, t.id);
+    return { tipo: t.tipo, id: t.id, titulo: r.titulo || t.titulo || 'Sem título', ano: r.ano ?? t.ano ?? '', poster: r.poster || t.poster || '', nota: t.nota == null ? null : Number(t.nota), extra };
+  };
+  const filmes = d.vistos.filter((t) => t.tipo === 'filme');
+  const porNota = (a, b) => (b.nota ?? -1) - (a.nota ?? -1) || String(a.titulo).localeCompare(String(b.titulo));
+  let titulo;
+  let itens;
+  if (tipo === 'nota') {
+    titulo = `Nota ${v}`;
+    itens = d.vistos.filter((t) => t.nota != null && Math.round(t.nota) === Number(v)).map((t) => linhaDe(t)).sort((a, b) => (b.ano || 0) - (a.ano || 0));
+  } else if (tipo === 'mes') {
+    titulo = `${MESL[v - 1]} de ${e.ano}`;
+    itens = d.diario.filter((x) => x.data.startsWith(`${e.ano}-${String(v).padStart(2, '0')}`)).map((x) => linhaDe({ tipo: x.tipo, id: x.tmdb_id, nota: x.nota }, `dia ${Number(x.data.slice(8, 10))}${x.revisto ? ' · visto de novo' : ''}`));
+  } else if (tipo === 'genero') {
+    titulo = v;
+    itens = filmes.filter((t) => (d.res(t.tipo, t.id).generos || []).includes(v)).map((t) => linhaDe(t)).sort(porNota);
+  } else {
+    titulo = `Anos ${v}`;
+    itens = filmes.filter((t) => { const a = d.res(t.tipo, t.id).ano; return a && `${Math.floor(a / 10) * 10}` === v; }).map((t) => linhaDe(t)).sort(porNota);
+  }
+  const corpo = itens.length
+    ? `<div class="list">${itens.slice(0, 300).map((t) => `<a class="li" href="#/${t.tipo}/${t.id}">${poster(t, { tam: 'w154' })}<div><div class="t">${esc(t.titulo)}</div><div class="s">${[t.ano, t.extra].filter(Boolean).join(' · ')}</div></div><span class="r">${selo(t.nota)}</span></a>`).join('')}</div>`
+    : '<p class="note">Nada nesta barra.</p>';
+  folha(titulo, `${itens.length} título${itens.length === 1 ? '' : 's'}`, corpo);
+}
 const ranking = (lista) => {
   const max = lista[0]?.n || 1;
   return lista.map((p, i) => `<a class="rank" href="#/pessoa/${p.id}"><span class="n">${i + 1}</span>
@@ -102,15 +135,15 @@ function corpoPerfil(pessoa, ehMeu, d, e) {
   ${recentes.length ? `<section><h2>Vistos recentemente</h2><div class="row">${recentes.map((t) => tile(t, t.nota != null ? `nota ${selo(t.nota)}` : '')).join('')}</div></section>` : ''}
   <section><h2>Em ${e.ano}</h2>
     <div class="stats"><div class="stat"><b>${e.noAno}</b><span>sessões no diário</span></div><div class="stat"><b>${e.horasAno}</b><span>horas</span></div><div class="stat"><b>${e.mediaAno != null ? nota(e.mediaAno) : '–'}</b><span>nota média</span></div></div>
-    ${e.noAno ? `<div><div class="hist meses">${e.porMes.map((n) => `<i style="height:${(n / Math.max(...e.porMes, 1)) * 100}%" title="${n}"></i>`).join('')}</div><div class="hist-l">${['J', 'F', 'M', 'A', 'M', 'J', 'J', 'A', 'S', 'O', 'N', 'D'].map((m) => `<span>${m}</span>`).join('')}</div></div>` : ''}
+    ${e.noAno ? `<div><div class="hist meses">${e.porMes.map((n, i) => `<button data-graf="mes" data-v="${i + 1}" aria-label="${MESL[i]}: ${n}. Toque para ver quais."><i style="height:${(n / Math.max(...e.porMes, 1)) * 100}%"></i></button>`).join('')}</div><div class="hist-l">${['J', 'F', 'M', 'A', 'M', 'J', 'J', 'A', 'S', 'O', 'N', 'D'].map((m) => `<span>${m}</span>`).join('')}</div></div>` : ''}
   </section>
   ${e.comNota ? `<section><h2>Notas <small>${e.comNota} títulos · média ${nota(e.media)}</small></h2>
-    <div><div class="hist">${e.hist.map((n, i) => `<i style="height:${(n / Math.max(...e.hist, 1)) * 100}%" title="nota ${i}: ${n}"></i>`).join('')}</div><div class="hist-l">${e.hist.map((_, i) => `<span>${i}</span>`).join('')}</div></div></section>` : ''}
+    <div><div class="hist">${e.hist.map((n, i) => `<button data-graf="nota" data-v="${i}" aria-label="Nota ${i}: ${n}. Toque para ver quais."><i style="height:${(n / Math.max(...e.hist, 1)) * 100}%"></i></button>`).join('')}</div><div class="hist-l">${e.hist.map((_, i) => `<span>${i}</span>`).join('')}</div></div></section>` : ''}
   ${e.atores.length ? `<section><h2>Atores que ${ehMeu ? 'você mais vê' : `${esc(pessoa.nome)} mais vê`}</h2><div>${ranking(e.atores)}</div></section>` : ''}
   ${e.diretores.length ? `<section><h2>Diretores que ${ehMeu ? 'você mais vê' : `${esc(pessoa.nome)} mais vê`}</h2><div>${ranking(e.diretores)}</div></section>` : ''}
   ${e.melhores.length ? `<section><h2>Diretores com a melhor média <small>mínimo de 3 filmes com nota</small></h2><div>${ranking(e.melhores)}</div></section>` : ''}
-  ${e.generos.length ? `<section><h2>Gêneros</h2>${barras(e.generos)}</section>` : ''}
-  ${e.decadas.length ? `<section><h2>Décadas</h2>${barras(e.decadas.map(([dec, n]) => [`Anos ${dec}`, n]), 'var(--list)')}</section>` : ''}
+  ${e.generos.length ? `<section><h2>Gêneros</h2>${barras(e.generos, undefined, 'genero')}</section>` : ''}
+  ${e.decadas.length ? `<section><h2>Décadas</h2>${barras(e.decadas.map(([dec, n]) => [`Anos ${dec}`, n, dec]), 'var(--list)', 'decada')}</section>` : ''}
   ${d.listas.length ? `<section><h2>Listas <small>${d.listas.length}</small></h2><div class="listas">${d.listas.map((l) => `<div class="temp" data-lista="${l.id}"><button class="temp-h" data-acao="lista" data-id="${l.id}" style="grid-template-columns:1fr auto"><div><div class="t">${esc(l.nome)}</div><div class="s">${l.lista_itens?.[0]?.count ?? 0} títulos${l.ranqueada ? ' · ranking' : ''}</div></div><span class="seta">›</span></button></div>`).join('')}</div></section>` : ''}
   ${comp ? `<section><h2>Você × ${nomeDele}</h2>
     <div class="card"><div class="entre"><span>Compatibilidade de gosto</span><b class="selo" style="font-size:26px">${comp.porcento}%</b></div><div class="lbar-big"><i style="width:${comp.porcento}%;background:var(--star)"></i></div>
@@ -180,6 +213,7 @@ export async function render(el) {
   <section style="align-items:center;text-align:center;gap:10px">
     ${ehMeu ? (carinha('perfil', 'lg') || avatar(pessoa)) : avatar(pessoa)}
     <div style="font-size:24px;font-weight:800;letter-spacing:-.02em">${esc(pessoa.nome)}</div>
+    ${ehMeu && u ? `<div class="actions" style="justify-content:center;gap:16px;margin-top:-6px"><label class="texto" style="cursor:pointer">Trocar foto<input type="file" accept="image/*" id="nova-foto" hidden></label>${nuvem.fotoEscolhida() ? '<button class="texto" data-acao="foto-google">Usar a do Google</button>' : ''}</div>` : ''}
     ${o ? `<div class="seg" role="group" aria-label="Perfil"><button data-ver="" aria-pressed="${ehMeu}">Você</button><button data-ver="${o.id}" aria-pressed="${!ehMeu}">${esc(o.nome)}${o.ativo ? '' : ' (ainda não entrou)'}</button></div>` : ''}
     <div class="pstats">${numeros}</div>
     ${u ? '' : '<p class="note">Sem login, estes números são só deste aparelho.</p>'}
@@ -198,6 +232,7 @@ export async function render(el) {
   }
   if (minhaVez !== vez) return;
   const e = estatisticas(d);
+  grafico = { d, e };
   if (!ehMeu) {
     $('.pstats', el).innerHTML = `<div><b>${e.total}</b><span>Filmes</span></div><div><b>${e.series}</b><span>Séries</span></div><div><b>${e.noAno}</b><span>Em ${e.ano}</span></div><div><b>${social.queroDoOutro().length}</b><span>Quero ver</span></div>`;
   }
@@ -231,8 +266,34 @@ async function cartaoAvisos(el) {
     <p class="${e === 'ligado' ? 'ok' : ''}" style="${e === 'ligado' ? '' : 'color:var(--fg)'}">${texto}</p>${botoes ? `<div class="actions">${botoes}</div>` : ''}`;
 }
 
+/** Reduz a imagem escolhida para um quadrado pequeno (recorte pelo centro), para caber no perfil. */
+async function reduzirFoto(arquivo, lado = 256) {
+  const url = URL.createObjectURL(arquivo);
+  try {
+    const im = new Image();
+    await new Promise((ok, erro) => { im.onload = ok; im.onerror = erro; im.src = url; });
+    const menor = Math.min(im.naturalWidth, im.naturalHeight);
+    const tela = document.createElement('canvas');
+    tela.width = tela.height = lado;
+    tela.getContext('2d').drawImage(im, (im.naturalWidth - menor) / 2, (im.naturalHeight - menor) / 2, menor, menor, 0, 0, lado, lado);
+    return tela.toDataURL('image/jpeg', 0.82);
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
+
 function ligar(el) {
   cartaoAvisos(el);
+  const novaFoto = $('#nova-foto', el);
+  if (novaFoto) {
+    novaFoto.onchange = async () => {
+      const arquivo = novaFoto.files?.[0];
+      if (!arquivo) return;
+      let foto;
+      try { foto = await reduzirFoto(arquivo); } catch { toast('Não deu para ler essa imagem'); return; }
+      toast((await nuvem.salvarFoto(foto)) ? 'Foto trocada' : 'Não deu para gravar a foto');
+    };
+  }
   const form = $('#chaves', el);
   if (form) {
     form.onsubmit = async (e) => {
@@ -251,6 +312,8 @@ function ligar(el) {
   }
 
   el.onclick = async (e) => {
+    const barra = e.target.closest('[data-graf]');
+    if (barra) { if (grafico) abrirGrafico(barra.dataset.graf, barra.dataset.v); return; }
     const st = e.target.closest('button[data-streaming]');
     if (st) {
       const ok = await nuvem.alternarStreaming(st.dataset.streaming);
@@ -266,6 +329,8 @@ function ligar(el) {
     if (acao === 'entrar') {
       b.disabled = true;
       try { await nuvem.entrar(); } catch { b.disabled = false; toast('Não deu para abrir o login'); }
+    } else if (acao === 'foto-google') {
+      toast((await nuvem.salvarFoto(null)) ? 'Voltou para a foto do Google' : 'Não deu para gravar');
     } else if (acao === 'sair') {
       await nuvem.sair();
       toast('Você saiu');

@@ -4,7 +4,7 @@ import * as nuvem from '../nuvem.js';
 import * as dados from '../dados.js';
 import * as social from '../social.js';
 import * as curiosidades from '../curiosidades.js';
-import { $, esc, nota, notaMinha, dataBR, toast, corDe } from '../ui.js';
+import { $, esc, nota, notaMinha, dataBR, toast, corDe, hoje, IC } from '../ui.js';
 
 const avatar = (p) => {
   const [a, b] = corDe(p.nome);
@@ -40,8 +40,22 @@ export function grupoSocial(meta) {
     <button class="lin" data-acao="favorito" role="switch" aria-checked="${f}"><span class="n">Nos meus favoritos<small>Até 4, aparecem no seu perfil</small></span><span class="chave${f ? ' on' : ''}"></span></button>
   </div>`;
 }
+/** Botão "Vi de novo" (só com login e para o que a pessoa já viu): registra a sessão de hoje no diário como revista. */
+export function botaoRever(m) {
+  if (!nuvem.usuario() || !(m.visto || m.nota != null)) return '';
+  if (m.revistoEm === hoje()) return `<button class="btn small on-seen rever" data-acao="desfazer-rever">${IC.rever}Visto de novo hoje · desfazer</button>`;
+  if (m.vistoEm === hoje()) return ''; // viu hoje pela primeira vez: a sessão de hoje já está no diário
+  return `<button class="btn small rever" data-acao="rever">${IC.rever}Vi de novo</button>`;
+}
+
 /** Trata os toques nos botões extras. Devolve true se o toque era de um deles. */
 export async function tocarExtra(acao, meta, botao) {
+  if (acao === 'rever' || acao === 'desfazer-rever') {
+    botao.disabled = true;
+    const ok = acao === 'rever' ? await dados.verDeNovo(meta) : await dados.desfazerVerDeNovo(meta);
+    toast(!ok ? 'Não deu para gravar. Confira a internet.' : acao === 'rever' ? 'Entrou no diário de hoje como visto de novo' : 'Saiu do diário de hoje');
+    return true;
+  }
   if (acao === 'juntos') {
     const sim = !social.estaEmJuntos(meta.tipo, meta.id);
     const ok = await social.marcarJuntos(meta, sim);
