@@ -66,6 +66,21 @@ h2 small{font-size:13px;letter-spacing:0;color:var(--muted);font-weight:400;text
 .mark{position:absolute;z-index:3;top:6px;right:6px;width:9px;height:9px;border-radius:50%;background:var(--seen);box-shadow:0 0 0 2px rgba(0,0,0,.55)}
 .tag{display:inline-block;font-size:11px;font-weight:600;color:var(--muted);background:var(--raised);border-radius:5px;padding:1px 6px;line-height:1.5;vertical-align:1px}
 .tile .tag{position:absolute;z-index:3;top:6px;left:6px;background:var(--veu);color:var(--fg)}
+/* Connect the Stars: a corrente de atores e filmes, e as opções de cada passo */
+.es-cadeia{display:flex;flex-wrap:wrap;align-items:flex-start;gap:8px 3px;background:var(--surface);border-radius:var(--r);padding:12px 10px}
+.es-cadeia>i{font-style:normal;color:var(--faint);margin-top:12px;width:8px;text-align:center}
+.es-elo{display:flex;flex-direction:column;align-items:center;gap:4px;width:52px;min-width:0}
+.es-elo small{font-size:10.5px;line-height:1.15;color:var(--muted);text-align:center;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;width:100%}
+.es-elo .ph{width:44px;height:44px}
+.es-elo .poster{width:34px;padding:2px;border-radius:5px}
+.es-elo .poster b,.es-elo .poster span{display:none}
+.es-elo.filme{justify-content:flex-start}
+.es-elo.alvo .ph{box-shadow:0 0 0 2px var(--star)}
+.es-elo.alvo small{color:var(--star);font-weight:600}
+.es-op{gap:12px}
+.es-op .poster{width:34px;flex:none;padding:2px;border-radius:5px}
+.es-op .poster b,.es-op .poster span{display:none}
+.es-op .ph{flex:none}
 /* conversa embaixo de uma review */
 .coms{display:flex;flex-direction:column;gap:10px;margin-top:12px;padding-top:12px;border-top:1px solid var(--line)}
 .com{padding-left:10px;border-left:2px solid var(--line)}
