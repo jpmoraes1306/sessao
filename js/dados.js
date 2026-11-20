@@ -76,7 +76,7 @@ async function reenviar() {
         const serie = Number(chave.slice(4));
         const s = d.series[serie] || { eps: {}, temps: {} };
         ver(await b.from('episodios_vistos').delete().match({ user_id: user, serie_id: serie }));
-        const eps = Object.entries(s.eps || {}).map(([k, v]) => { const [t, e] = k.split('x').map(Number); return { user_id: user, serie_id: serie, temporada: t, episodio: e, data: v.d || hoje(), nota: v.r ?? null }; });
+        const eps = Object.entries(s.eps || {}).map(([k, v]) => { const [t, e] = k.split('x').map(Number); return { user_id: user, serie_id: serie, temporada: t, episodio: e, data: v.d || hoje(), nota: v.r ?? null, vezes: v.v || 1 }; });
         if (eps.length) ver(await b.from('episodios_vistos').insert(eps));
         ver(await b.from('notas_temporada').delete().match({ user_id: user, serie_id: serie }));
         const temps = Object.entries(s.temps || {}).map(([t, r]) => ({ user_id: user, serie_id: serie, temporada: Number(t), nota: r }));
@@ -185,6 +185,29 @@ export async function registrarSessao(meta, data, revisto, juntosId = null) {
   return !r.some((x) => x.error);
 }
 
+/** "Vi de novo" (filme ou série): entra no diário de hoje como revisto. Devolve false se não deu para gravar. */
+export async function verDeNovo(meta) {
+  const k = chaveDe(meta.tipo, meta.id);
+  const vistoEm = d.titulos[k]?.vistoEm;
+  const ok = await registrarSessao(meta, hoje(), true);
+  if (d.titulos[k]) {
+    if (!vistoEm) delete d.titulos[k].vistoEm; // registrarSessao preenche com hoje, mas a primeira vez não foi hoje
+    if (ok) d.titulos[k].revistoEm = hoje();
+    salvar();
+  }
+  return ok;
+}
+/** Desfaz o "vi de novo" de hoje: tira do diário a entrada revista de hoje. */
+export async function desfazerVerDeNovo(meta) {
+  const b = banco();
+  if (!b) return false;
+  const { error } = await b.from('diario').delete().match({ user_id: eu(), tipo: meta.tipo, tmdb_id: meta.id, data: hoje(), revisto: true, origem: 'app' });
+  if (error) return false;
+  const k = chaveDe(meta.tipo, meta.id);
+  if (d.titulos[k]) { delete d.titulos[k].revistoEm; salvar(); }
+  return true;
+}
+
 /* ---------- review ---------- */
 /** Salva (ou apaga, com texto vazio) a review da pessoa para o título. Escrever uma review marca como visto. */
 export function salvarReview(meta, texto, spoiler) {
@@ -225,7 +248,7 @@ export function alternarFavorito(meta) {
 /* ---------- episódios ---------- */
 const serieDe = (id) => (d.series[id] = d.series[id] || { eps: {}, temps: {} });
 
-/** { "2x3": { d: "2026-11-19", r: 8 } } */
+/** { "2x3": { d: "2026-11-19", r: 8, v: 2 } }  (d = dia, r = nota, v = vezes que viu, só quando passa de 1) */
 export const episodios = (serieId) => d.series[serieId]?.eps || {};
 export const notaTemporada = (serieId, t) => d.series[serieId]?.temps?.[t] ?? null;
 
@@ -255,6 +278,18 @@ export function darNotaEpisodio(serieId, t, e, r) {
   if (r == null) delete s.eps[k].r; else s.eps[k].r = r;
   salvar();
   naConta(['nota do episódio', `eps:${serieId}`], (b, user) => b.from('episodios_vistos').upsert({ user_id: user, serie_id: Number(serieId), temporada: t, episodio: e, data: s.eps[k].d, nota: r ?? null }));
+}
+
+/** Viu o episódio de novo: soma uma vez (delta -1 tira uma). Devolve quantas vezes ficou (0 se o episódio nem está marcado). */
+export function reverEpisodio(serieId, t, e, delta = 1) {
+  const s = serieDe(serieId);
+  const k = ke(t, e);
+  if (!s.eps[k]) return 0;
+  const v = Math.max(1, Math.min(99, (s.eps[k].v || 1) + delta));
+  if (v > 1) s.eps[k].v = v; else delete s.eps[k].v;
+  salvar();
+  naConta(['episódio visto de novo', `eps:${serieId}`], (b, user) => b.from('episodios_vistos').update({ vezes: v }).match({ user_id: user, serie_id: Number(serieId), temporada: t, episodio: e }));
+  return v;
 }
 
 export function darNotaTemporada(serieId, t, r) {
@@ -316,7 +351,7 @@ async function subirLocal(b, user) {
   const eps = [];
   const temps = [];
   for (const [serie, s] of Object.entries(d.series)) {
-    for (const [k, v] of Object.entries(s.eps || {})) { const [t, e] = k.split('x').map(Number); eps.push({ user_id: user, serie_id: Number(serie), temporada: t, episodio: e, data: v.d || hoje(), nota: v.r ?? null }); }
+    for (const [k, v] of Object.entries(s.eps || {})) { const [t, e] = k.split('x').map(Number); eps.push({ user_id: user, serie_id: Number(serie), temporada: t, episodio: e, data: v.d || hoje(), nota: v.r ?? null, vezes: v.v || 1 }); }
     for (const [t, r] of Object.entries(s.temps || {})) temps.push({ user_id: user, serie_id: Number(serie), temporada: Number(t), nota: r });
   }
   for (let i = 0; i < eps.length; i += 500) await b.from('episodios_vistos').upsert(eps.slice(i, i + 500), { ignoreDuplicates: true });
@@ -341,7 +376,7 @@ export function sincronizar() {
       const [av, quero, eps, temps, favs] = await Promise.all([
         lerTudo(() => b.from('avaliacoes').select('tipo, tmdb_id, visto, nota, curtido, seguindo, review, spoiler, review_em, atualizado_em').eq('user_id', user).order('tmdb_id')),
         lerTudo(() => b.from('quero_ver').select('tipo, tmdb_id, adicionado_em').eq('user_id', user).eq('juntos', false).order('tmdb_id')),
-        lerTudo(() => b.from('episodios_vistos').select('serie_id, temporada, episodio, data, nota').eq('user_id', user).order('serie_id')),
+        lerTudo(() => b.from('episodios_vistos').select('serie_id, temporada, episodio, data, nota, vezes').eq('user_id', user).order('serie_id')),
         lerTudo(() => b.from('notas_temporada').select('serie_id, temporada, nota').eq('user_id', user).order('serie_id')),
         lerTudo(() => b.from('favoritos').select('posicao, tipo, tmdb_id').eq('user_id', user).order('posicao')),
       ]);
@@ -356,13 +391,13 @@ export function sincronizar() {
         return novo.titulos[k];
       };
       for (const a of av) {
-        Object.assign(base(a.tipo, a.tmdb_id), { visto: a.visto, nota: a.nota == null ? null : Number(a.nota), curtido: a.curtido, seguindo: a.seguindo, review: a.review || null, spoiler: a.spoiler, reviewEm: a.review_em, em: a.atualizado_em, vistoEm: d.titulos[chaveDe(a.tipo, a.tmdb_id)]?.vistoEm });
+        Object.assign(base(a.tipo, a.tmdb_id), { visto: a.visto, nota: a.nota == null ? null : Number(a.nota), curtido: a.curtido, seguindo: a.seguindo, review: a.review || null, spoiler: a.spoiler, reviewEm: a.review_em, em: a.atualizado_em, vistoEm: d.titulos[chaveDe(a.tipo, a.tmdb_id)]?.vistoEm, revistoEm: d.titulos[chaveDe(a.tipo, a.tmdb_id)]?.revistoEm });
       }
       for (const q of quero) Object.assign(base(q.tipo, q.tmdb_id), { quero: true, queroEm: q.adicionado_em });
       novo.favoritos = favs.map((f) => { const r = info.get(chaveDe(f.tipo, f.tmdb_id)) || {}; return { tipo: f.tipo, id: f.tmdb_id, titulo: r.titulo || '', ano: r.ano ?? null, poster: r.poster || '' }; });
       for (const e of eps) {
         const s = (novo.series[e.serie_id] = novo.series[e.serie_id] || { eps: {}, temps: {} });
-        s.eps[ke(e.temporada, e.episodio)] = { d: e.data, ...(e.nota == null ? {} : { r: Number(e.nota) }) };
+        s.eps[ke(e.temporada, e.episodio)] = { d: e.data, ...(e.nota == null ? {} : { r: Number(e.nota) }), ...(e.vezes > 1 ? { v: e.vezes } : {}) };
       }
       for (const t of temps) {
         const s = (novo.series[t.serie_id] = novo.series[t.serie_id] || { eps: {}, temps: {} });

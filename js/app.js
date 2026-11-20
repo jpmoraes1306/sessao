@@ -119,6 +119,13 @@ function mostrarLogin() {
   const u = nuvem.usuario();
   const chip = $('#chip');
   chip.textContent = u ? u.nome.trim()[0].toUpperCase() : 'Entrar';
+  if (u?.foto) {
+    const foto = new Image();
+    foto.alt = '';
+    foto.referrerPolicy = 'no-referrer';
+    foto.onload = () => { if (nuvem.usuario()?.foto === u.foto) chip.replaceChildren(foto); };
+    foto.src = u.foto;
+  }
   chip.classList.toggle('on', Boolean(u));
   chip.setAttribute('aria-label', u ? `Perfil de ${u.nome}` : 'Entrar');
 }

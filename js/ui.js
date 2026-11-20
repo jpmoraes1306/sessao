@@ -218,6 +218,21 @@ export function toast(msg) {
   toast.h = setTimeout(() => t.classList.remove('show'), 1900);
 }
 
+/** Folha que sobe de baixo, por cima da tela, com um título e um conteúdo que rola.
+    Fecha no véu, no ✕ ou quando a pessoa abre um título da lista. */
+export function folha(titulo, sub, corpo) {
+  document.querySelector('.folha-v')?.remove();
+  const caixa = document.createElement('div');
+  caixa.className = 'folha-v';
+  caixa.innerHTML = `<div class="folha" role="dialog" aria-modal="true" aria-label="${esc(titulo)}"><div class="pega"></div>
+    <div class="folha-t"><div><b>${esc(titulo)}</b><span>${esc(sub)}</span></div><button class="ic" data-fechar aria-label="Fechar">✕</button></div>
+    <div class="folha-c">${corpo}</div></div>`;
+  const fechar = () => { caixa.remove(); window.removeEventListener('hashchange', fechar); };
+  caixa.addEventListener('click', (e) => { if (e.target === caixa || e.target.closest('[data-fechar]')) fechar(); });
+  window.addEventListener('hashchange', fechar);
+  document.body.append(caixa);
+}
+
 /** Janela de pergunta com dois botões. Devolve true (sim), false (não) ou null (fechou sem responder). */
 export function perguntar({ titulo, texto, sim, nao }) {
   return new Promise((responder) => {

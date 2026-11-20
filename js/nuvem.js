@@ -107,6 +107,20 @@ export async function alternarStreaming(nome) {
   return !error;
 }
 
+/** A foto atual foi escolhida no app (e não veio do Google)? */
+export const fotoEscolhida = () => Boolean(perfil?.foto?.startsWith('data:'));
+/** Troca a foto de perfil: recebe a imagem já reduzida (data URL) ou null para voltar à do Google.
+    Fica no perfil, então aparece também para o outro. */
+export async function salvarFoto(dataUrl) {
+  if (!perfil || !cliente) return false;
+  const foto = dataUrl || sessao.user.user_metadata?.avatar_url || null;
+  const { error } = await cliente.from('perfis').update({ foto }).eq('id', sessao.user.id);
+  if (error) return false;
+  perfil.foto = foto;
+  avisar();
+  return true;
+}
+
 export async function sair() {
   if (cliente) await cliente.auth.signOut();
 }
