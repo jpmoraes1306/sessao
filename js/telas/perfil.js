@@ -186,7 +186,7 @@ function cartaoOvo() {
   const placar = ovo.placarDoMes();
   return `<p class="ovo-hoje"><span class="ovo-m">${s.svg}</span><span>Agora o símbolo escondido é <b>${esc(s.nome)}</b>. ${achei ? `Você já achou${typeof achei === 'string' ? ` às ${achei}` : ''}.` : 'Está em algum lugar do app, e quem achar primeiro ganha a rodada.'}</span></p>
     ${placar ? ovo.htmlPlacar(placar, 'Quem achou primeiro, placar') : ''}
-    ${achei ? (placar ? '<div class="actions"><a class="btn small on-star" href="#/frame/hoje">Jogar o frame desta rodada</a></div>' : '') : '<div class="actions"><button class="btn small" data-acao="dica">Me dá uma dica do lugar</button></div>'}
+    <div class="actions">${achei ? (placar ? '<a class="btn small on-star" href="#/frame/hoje">Jogar o frame desta rodada</a>' : '') : '<button class="btn small" data-acao="dica">Me dá uma dica do lugar</button>'}${placar ? '<a class="btn small on-list" href="#/estrelas/hoje">Connect the Stars</a>' : ''}</div>
     <p class="note">Troca duas vezes por dia, ao meio-dia e à meia-noite (a próxima troca é ${ovo.proximaTroca()}). Achar o símbolo mostra o Dafoe e o Cage da vez e libera o frame.</p>`;
 }
 
