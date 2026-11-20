@@ -87,24 +87,40 @@ export async function montarReviews(el, ctx, meta, aoSalvar = () => {}) {
 
   // manterRascunho: o que a pessoa está digitando continua na caixa quando a seção é refeita (chegaram as
   // reviews, ela curtiu a do outro...). Só não vale ao salvar, cancelar ou abrir para editar.
+  // Conversa embaixo de uma review: os comentários de vocês dois e a caixa para escrever. `r` é a linha da review.
+  const conversa = (r) => {
+    if (!r) return '';
+    const escondida = r.spoiler && !r.eu && !spoilerAberto; // a conversa de uma review com spoiler só abre junto com ela
+    if (escondida) return '';
+    return `<div class="coms">${(r.comentarios || []).map((c) => `<div class="com"><div class="who"><b>${c.eu ? 'Você' : esc(c.nome)}</b><span>${dataBR(c.criado_em)}${c.eu ? ` · <button class="texto" data-acao="apagar-comentario" data-id="${Number(c.id)}" data-autor="${esc(r.user_id)}">apagar</button>` : ''}</span></div><div class="txt">${esc(c.texto)}</div></div>`).join('')}
+      <div class="com-novo"><input class="com-campo" data-comentario="${esc(r.user_id)}" maxlength="1000" autocomplete="off" placeholder="${r.eu ? 'Responder…' : 'Comentar…'}" aria-label="${r.eu ? 'Responder na sua review' : `Comentar a review de ${esc(r.nome)}`}"><button class="btn small" data-acao="comentar" data-autor="${esc(r.user_id)}">Enviar</button></div></div>`;
+  };
+
   const desenhar = (manterRascunho = true) => {
     const rascunho = manterRascunho ? $('#minha-review', sec)?.value : null;
     const spoilerMarcado = manterRascunho ? $('#tem-spoiler', sec)?.checked : null;
+    // o que a pessoa está escrevendo num comentário também continua na caixa (e o cursor fica onde estava)
+    const comentando = new Map([...sec.querySelectorAll('[data-comentario]')].map((c) => [c.dataset.comentario, c.value]));
+    const focoEm = document.activeElement?.dataset?.comentario || null;
     const minha = dados.titulo(meta.tipo, meta.id);
     const dele = lista.find((r) => !r.eu);
     const minhaLinha = lista.find((r) => r.eu);
     const cartaoDele = dele ? `<div class="fact"><div class="who"><b>${esc(dele.nome)}</b><span>${dele.nota != null ? `<span class="selo">${notaMinha(dele.nota)}</span> · ` : ''}${dataBR(dele.review_em || '')}</span></div>
         ${dele.spoiler && !spoilerAberto ? '<button class="btn small" data-acao="abrir-spoiler">⚠ Tem spoiler. Mostrar</button>' : `<div class="txt">${esc(dele.review)}</div>`}
-        <div class="actions" style="margin-top:8px"><button class="btn small ${dele.curtidaPorMim ? 'on-like' : ''}" data-acao="curtir-review" data-autor="${dele.user_id}">${dele.curtidaPorMim ? '♥ Você curtiu' : '♡ Curtir'}</button></div></div>` : '';
+        <div class="actions" style="margin-top:8px"><button class="btn small ${dele.curtidaPorMim ? 'on-like' : ''}" data-acao="curtir-review" data-autor="${dele.user_id}">${dele.curtidaPorMim ? '♥ Você curtiu' : '♡ Curtir'}</button></div>${conversa(dele)}</div>` : '';
     const meuTexto = minha.review || '';
     const meuCartao = meuTexto && !editando
       ? `<div class="fact"><div class="who"><b>Você</b><span>${minha.nota != null ? `<span class="selo">${notaMinha(minha.nota)}</span> · ` : ''}${dataBR(minha.reviewEm || '')}${minha.spoiler ? ' · ⚠ spoiler' : ''}</span></div><div class="txt">${esc(meuTexto)}</div>
-          <div class="actions" style="margin-top:8px"><button class="btn small" data-acao="editar-review">Editar</button>${minhaLinha?.curtidaPeloOutro ? `<span class="note heart">♥ ${esc(nuvem.outro()?.nome || '')} curtiu</span>` : ''}</div></div>`
+          <div class="actions" style="margin-top:8px"><button class="btn small" data-acao="editar-review">Editar</button>${minhaLinha?.curtidaPeloOutro ? `<span class="note heart">♥ ${esc(nuvem.outro()?.nome || '')} curtiu</span>` : ''}</div>${conversa(minhaLinha)}</div>`
       : `<textarea class="field" id="minha-review" placeholder="O que você achou?">${esc(meuTexto)}</textarea>
           <div class="actions" style="justify-content:space-between;align-items:center"><label class="check"><input type="checkbox" id="tem-spoiler" ${minha.spoiler ? 'checked' : ''}> Contém spoiler</label>
           <span class="actions">${meuTexto ? '<button class="btn small" data-acao="cancelar-review">Cancelar</button>' : ''}<button class="btn small on-seen" data-acao="salvar-review">Salvar review</button></span></div>`;
     sec.innerHTML = `<h2>Reviews de vocês</h2><div class="facts">${cartaoDele}${meuCartao}</div>`;
     if (rascunho != null && $('#minha-review', sec)) { $('#minha-review', sec).value = rascunho; $('#tem-spoiler', sec).checked = Boolean(spoilerMarcado); }
+    for (const c of sec.querySelectorAll('[data-comentario]')) {
+      if (comentando.get(c.dataset.comentario)) c.value = comentando.get(c.dataset.comentario);
+      if (focoEm === c.dataset.comentario) c.focus();
+    }
   };
 
   sec.onclick = async (e) => {
@@ -117,6 +133,9 @@ export async function montarReviews(el, ctx, meta, aoSalvar = () => {}) {
       if (!texto.trim() && !tinha) { toast('Escreva a review antes de salvar'); return; }
       dados.salvarReview(meta, texto, $('#tem-spoiler', sec).checked);
       editando = false;
+      // a review nova já ganha a conversa embaixo, sem esperar a próxima visita à ficha
+      const eu = nuvem.usuario();
+      if (texto.trim() && !lista.some((r) => r.eu)) lista.push({ user_id: eu.id, eu: true, nome: eu.nome, comentarios: [] });
       toast(texto.trim() ? 'Review salva' : 'Review apagada');
       aoSalvar();
     } else if (acao === 'editar-review') editando = true;
@@ -126,9 +145,41 @@ export async function montarReviews(el, ctx, meta, aoSalvar = () => {}) {
       const r = lista.find((x) => x.user_id === b.dataset.autor);
       r.curtidaPorMim = !r.curtidaPorMim;
       social.curtirReview(meta.tipo, meta.id, r.user_id, r.curtidaPorMim);
+    } else if (acao === 'comentar') {
+      e.stopPropagation();
+      const campo = sec.querySelector(`[data-comentario="${CSS.escape(b.dataset.autor)}"]`);
+      const r = lista.find((x) => x.user_id === b.dataset.autor);
+      if (!campo || !r) return;
+      if (!campo.value.trim()) { toast('Escreva o comentário antes de enviar'); campo.focus(); return; }
+      b.disabled = true;
+      const novo = await social.comentarReview(meta.tipo, meta.id, r.user_id, campo.value);
+      if (!ctx.vivo()) return;
+      if (!novo) { b.disabled = false; toast('Não deu para enviar. Confira a internet.'); return; }
+      r.comentarios = [...(r.comentarios || []), novo];
+      campo.value = '';
+      toast('Comentário enviado');
+      desenhar();
+      return;
+    } else if (acao === 'apagar-comentario') {
+      e.stopPropagation();
+      const r = lista.find((x) => x.user_id === b.dataset.autor);
+      const ok = await social.apagarComentario(Number(b.dataset.id));
+      if (!ctx.vivo()) return;
+      if (!ok) { toast('Não deu para apagar'); return; }
+      if (r) r.comentarios = (r.comentarios || []).filter((c) => c.id !== Number(b.dataset.id));
+      toast('Comentário apagado');
+      desenhar();
+      return;
     } else return;
     e.stopPropagation();
     desenhar(!['salvar-review', 'cancelar-review', 'editar-review'].includes(acao));
+  };
+
+  // Enter na caixa de comentário envia
+  sec.onkeydown = (e) => {
+    if (e.key !== 'Enter' || !e.target.dataset?.comentario) return;
+    e.preventDefault();
+    sec.querySelector(`[data-acao="comentar"][data-autor="${CSS.escape(e.target.dataset.comentario)}"]`)?.click();
   };
 
   desenhar();

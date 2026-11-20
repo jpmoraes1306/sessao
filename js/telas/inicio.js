@@ -126,7 +126,7 @@ export function atualizar(el) {
 
 /* ---------- atividade do outro (as suas ficam no seu Diário) ---------- */
 function tileFeed(a, o) {
-  const fez = a.nota != null ? `deu <span class="selo">${notaMinha(a.nota)}</span>` : a.visto ? 'viu' : a.seguindo ? 'acompanha' : a.curtido ? 'curtiu' : 'marcou';
+  const fez = a.comentou ? 'comentou' : a.nota != null ? `deu <span class="selo">${notaMinha(a.nota)}</span>` : a.visto ? 'viu' : a.seguindo ? 'acompanha' : a.curtido ? 'curtiu' : 'marcou';
   // a miniatura é a foto de perfil do outro; sem foto, a inicial
   const mini = o?.foto ? `<img class="av" src="${esc(o.foto)}" alt="" referrerpolicy="no-referrer" onerror="this.replaceWith(Object.assign(document.createElement('i'),{className:'av ele',textContent:this.dataset.l}))" data-l="${esc((a.nome || '?')[0])}">` : `<i class="av ele">${esc((a.nome || '?')[0])}</i>`;
   return `<a class="tile" href="#/${a.tipo}/${a.tmdb_id}" aria-label="${esc(a.nome)}: ${esc(a.titulo)}">${poster(a)}
@@ -152,6 +152,15 @@ function atalhos(el) {
     .filter(([id]) => { const s = document.getElementById(id); return s && !s.hidden; });
   alvo.innerHTML = lista.map(([id, n]) => `<button class="cap" data-ir="${id}">${n}</button>`).join('');
 }
+
+// os avisos pedidos chegam da conta um instante depois do login: os sinos da fileira de estreias se acertam
+window.addEventListener('avisos:carregados', () => {
+  document.querySelectorAll('#view[data-aba="inicio"] [data-acao="avisar"]').forEach((b) => {
+    const ligado = avisos.pediuAviso(b.dataset.id);
+    b.classList.toggle('on', ligado);
+    b.setAttribute('aria-pressed', ligado);
+  });
+});
 
 /* ---------- página ---------- */
 let altaTipo = 'filme';
@@ -204,6 +213,20 @@ export function render(el) {
       dados.marcarEpisodios(b.dataset.serie, [{ t: Number(b.dataset.t), e: Number(b.dataset.e) }], true);
       toast(`${cod(b.dataset.t, b.dataset.e)} visto`);
       emAndamento(el).catch(() => {});
+    } else if (b.dataset.acao === 'avisar') {
+      e.preventDefault();
+      b.disabled = true;
+      const id = Number(b.dataset.id);
+      const ok = await avisos.alternarEstreia({ id, titulo: b.dataset.titulo }, b.dataset.data);
+      b.disabled = false;
+      const ligado = avisos.pediuAviso(id);
+      b.classList.toggle('on', ligado);
+      b.setAttribute('aria-pressed', ligado);
+      if (!ok) { toast('Não deu para gravar o aviso'); return; }
+      if (!ligado) { toast('Aviso desligado'); return; }
+      // o aviso só chega em aparelho com os avisos ativados
+      const chega = (await avisos.estado().catch(() => '')) === 'ligado';
+      toast(chega ? `Aviso ligado para ${dataCurta(b.dataset.data)}` : 'Aviso marcado. Ative os avisos no Perfil para receber.');
     }
   };
 
@@ -211,9 +234,11 @@ export function render(el) {
   filmeDoDia().then((d) => { if (pedidoDoDia !== vezDoDia) return; partes.dia = d ? slideDoDia(d) : ''; desenharDestaque(el); })
     .catch((erro) => { const alvo = $('#destaque', el); if (alvo && !partes.serie) alvo.innerHTML = erroTexto(erro); });
 
+  // cada estreia tem um sino no canto: liga ou desliga o aviso do dia da estreia (só para quem está logado)
+  const sino = (c) => (nuvem.usuario() ? `<button class="ic sino-e${avisos.pediuAviso(c.id) ? ' on' : ''}" data-acao="avisar" data-id="${c.id}" data-titulo="${esc(c.titulo)}" data-data="${esc(c.data)}" aria-pressed="${avisos.pediuAviso(c.id)}" aria-label="Avisar na estreia de ${esc(c.titulo)}">${IC.sino}</button>` : '');
   por('#estreias', tmdb.estreias(), (lista) => `<div class="row">${lista.slice(0, 12).map((c) => `
-    <a class="tile" href="${link(c)}" aria-label="${esc(c.titulo)}, estreia ${dataCurta(c.data)}">${poster(c).replace(/<\/div>$/, `<span class="dia">${dataCurta(c.data)}</span></div>`)}
-      <span class="leg"><span class="n">juntos <span class="junto">${dataCurta(proximaTerca(c.data))}</span>${avisos.pediuAviso(c.id) ? ' · aviso' : ''}</span></span></a>`).join('')}</div>`);
+    <div class="tile"><a class="tile-a" href="${link(c)}" aria-label="${esc(c.titulo)}, estreia ${dataCurta(c.data)}">${poster(c).replace(/<\/div>$/, `<span class="dia">${dataCurta(c.data)}</span></div>`)}
+      <span class="leg"><span class="n">juntos <span class="junto">${dataCurta(proximaTerca(c.data))}</span></span></span></a>${sino(c)}</div>`).join('')}</div>`);
   por('#cartaz', tmdb.emCartaz(), fileira);
   carregarAlta();
 }

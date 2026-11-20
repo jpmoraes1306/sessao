@@ -2,7 +2,7 @@
 // Aceita o título em inglês ou em português, com ou sem acento.
 // Cada botão (Tudo, Filmes, Séries, Pessoas) refaz a busca no tipo escolhido; sem texto, mostra o que está em alta.
 import * as tmdb from '../tmdb.js';
-import { temChaves } from '../config.js';
+import { temChaves, temStreamings } from '../config.js';
 import * as streaming from '../streaming.js';
 import { simboloEscondido } from '../ovo.js';
 import { semChaves } from './comum.js';
@@ -72,7 +72,7 @@ async function buscar(el) {
     let r = await tmdb.buscar(q, estado.tipo);
     if (minhaVez !== vez) return;
     // "só nos meus streamings": ficam as pessoas e os títulos que estão num serviço seu
-    if (estado.meus) r = [...r.filter((x) => x.tipo === 'pessoa'), ...await streaming.filtrar(r.filter((x) => x.tipo !== 'pessoa'))];
+    if (estado.meus && temStreamings()) r = [...r.filter((x) => x.tipo === 'pessoa'), ...await streaming.filtrar(r.filter((x) => x.tipo !== 'pessoa'))];
     if (minhaVez !== vez) return;
     estado.resultados = r;
   } catch (erro) {
@@ -94,7 +94,7 @@ export function render(el) {
       <input id="q" type="search" inputmode="search" enterkeyhint="search" placeholder="Filme, série, ator ou diretor" value="${esc(estado.q)}" autocomplete="off" autocapitalize="off" spellcheck="false">
       <button class="limpar" data-limpar aria-label="Limpar busca" ${estado.q ? '' : 'hidden'}>×</button></label>
     <div class="seg" role="group" aria-label="Tipo">${TIPOS.map(([k, l]) => `<button data-tipo="${k}" aria-pressed="${estado.tipo === k}">${l}</button>`).join('')}${simboloEscondido('buscar')}</div>
-    <div class="seg"><button data-meus aria-pressed="${estado.meus}">Só nos meus streamings</button></div>
+    ${temStreamings() ? `<div class="seg"><button data-meus aria-pressed="${estado.meus}">Só nos meus streamings</button></div>` : ''}
     <div id="res">${lista()}</div>
   </section>`;
 

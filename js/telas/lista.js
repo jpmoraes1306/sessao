@@ -5,6 +5,7 @@ import * as nuvem from '../nuvem.js';
 import * as social from '../social.js';
 import * as mix from '../mix.js';
 import * as streaming from '../streaming.js';
+import { temStreamings } from '../config.js';
 import * as notasfora from '../notasfora.js';
 import { simboloEscondido } from '../ovo.js';
 import { esc, tile } from '../ui.js';
@@ -48,6 +49,7 @@ export async function render(el) {
   const logado = Boolean(nuvem.usuario());
   const o = logado ? nuvem.outro() : null;
   if (!logado && filtro.lista !== 'minha') filtro.lista = 'minha';
+  if (!temStreamings()) filtro.meus = false; // quem não assina nenhum streaming não tem esse filtro
   const LISTAS = [['minha', 'Minha'], ...(o ? [['dele', o.nome]] : []), ...(logado ? [['juntos', 'Juntos']] : []), ...(o ? [['mix', 'Mix']] : [])];
   const seletor = LISTAS.length > 1 ? `<div class="seg" role="group" aria-label="Lista">${LISTAS.map(([k, r]) => `<button data-lista="${k}" aria-pressed="${filtro.lista === k}">${esc(r)}</button>`).join('')}</div>` : '';
   const moldura = (miolo, resumo = '') => `<section>${seletor}${resumo || simboloEscondido('lista') ? `<p class="sub2">${resumo}${simboloEscondido('lista')}</p>` : ''}${miolo}</section>`;
@@ -129,7 +131,7 @@ export async function render(el) {
       <label>Ordenar<select name="ordem">${opcoes(ehMix ? [['recentes', 'Ordem do Mix'], ...ORDENS.slice(1)] : ORDENS, filtro.ordem)}</select></label>
       <label>Gênero<select name="genero">${opcoes([['', 'Todos os gêneros'], ...generos.map((g) => [g, g])], filtro.genero)}</select></label>
       <label>Ano<select name="epoca">${opcoes([['', 'Todas as décadas'], ...decadas.map((d) => [d, `Anos ${d}`])], filtro.epoca)}</select></label>
-      <button data-meus aria-pressed="${filtro.meus}">Meus streamings</button>
+      ${temStreamings() ? `<button data-meus aria-pressed="${filtro.meus}">Meus streamings</button>` : ''}
     </div>${explica}
     ${itens.length ? `<div class="grid4">${itens.slice(0, 400).map((t) => tile(t)).join('')}</div>${itens.length > 400 ? `<p class="note">Mostrando 400 de ${itens.length}. Use os filtros para ver o resto.</p>` : ''}`
       : `<p class="note">${filtro.meus && !todos.length ? 'Nada desta lista está nos seus streamings agora.' : 'Nenhum título com esse filtro.'}</p>`}`

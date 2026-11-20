@@ -194,6 +194,12 @@ window.addEventListener('ovo:achado', () => { const c = document.querySelector('
 function ajustes() {
   const u = nuvem.usuario();
   const streamings = [...new Set(MEUS_STREAMINGS.values())];
+  // Os streamings são de cada perfil. Quem assina algum vê o bloco aqui; quem não assina nenhum não vê filtro nem
+  // destaque em lugar nenhum, e o bloco fica guardado em "Avançado" para o dia em que assinar.
+  const blocoStreamings = `<section><h2>${streamings.length ? 'Seus streamings' : 'Streamings que você assina'} <small>${u ? 'toque para ligar ou desligar' : ''}</small></h2>
+    <div class="card">${u ? `<div class="seg">${SERVICOS.map((s) => `<button data-streaming="${esc(s.nome)}" aria-pressed="${streamings.includes(s.nome)}">${esc(s.nome)}</button>`).join('')}</div>` : `<p>${esc(streamings.join(' · '))}</p>`}
+      <p>${streamings.length ? 'Aparecem primeiro e com destaque em "Onde assistir" e valem para o filtro "Só nos meus streamings" da busca e do Quero ver. Valem só para o seu perfil.' : 'Nenhum ligado. Se você ligar algum, ele ganha destaque em "Onde assistir" e aparece o filtro "Só nos meus streamings" na busca e no Quero ver. Vale só para o seu perfil.'}</p></div>
+  </section>`;
   return `
   <section><h2>Conta</h2>
     <div class="card">${u
@@ -209,14 +215,12 @@ function ajustes() {
   ${u ? `<section><h2>Avisos neste aparelho</h2>
     <div class="card" id="cartao-avisos"><p>Episódio novo das séries que você acompanha e estreia marcada com "Avisar".</p><div class="skel txt"></div></div>
   </section>` : ''}
-  <section><h2>Seus streamings <small>${u ? 'toque para ligar ou desligar' : ''}</small></h2>
-    <div class="card">${u ? `<div class="seg">${SERVICOS.map((s) => `<button data-streaming="${esc(s.nome)}" aria-pressed="${streamings.includes(s.nome)}">${esc(s.nome)}</button>`).join('')}</div>` : `<p>${esc(streamings.join(' · '))}</p>`}
-      <p>Aparecem primeiro e com destaque em "Onde assistir" e valem para o filtro "Só nos meus streamings" da busca e do Quero ver.</p></div>
-  </section>
+  ${streamings.length ? blocoStreamings : ''}
   <section><h2>Caça ao símbolo</h2>
     <div class="card" id="cartao-ovo">${cartaoOvo()}</div>
   </section>
-  <details class="avancado" ${chave('tmdb') ? '' : 'open'}><summary><span>Avançado<small>Chaves das APIs e dados deste aparelho. Não é de uso diário.</small></span><svg class="vai" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></summary>
+  <details class="avancado" ${chave('tmdb') ? '' : 'open'}><summary><span>Avançado<small>${streamings.length ? '' : 'Streamings, '}${streamings.length ? 'Chaves' : 'chaves'} das APIs e dados deste aparelho. Não é de uso diário.</small></span><svg class="vai" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></summary>
+  ${streamings.length || !u ? '' : blocoStreamings}
   <section><h2>Chaves das APIs</h2>
     <form class="card" id="chaves">
       <p>${u ? 'As chaves ficam guardadas na conta e chegam sozinhas em cada aparelho depois do login.' : 'Sem login, as chaves ficam só neste aparelho.'}</p>
