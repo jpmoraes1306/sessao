@@ -380,6 +380,11 @@ h2 small{font-size:13px;letter-spacing:0;color:var(--muted);font-weight:400;text
 .ovo-f b{font-size:15px;font-weight:700;color:var(--fg)}
 .ovo-f .cena{aspect-ratio:16/9;border-radius:10px;overflow:hidden;background:var(--raised)}
 .ovo-f .cena img{width:100%;height:100%;object-fit:cover}
+/* foto cômica do depósito: aparece inteira (sem cortar a pose), sobre uma cópia desfocada dela mesma */
+.ovo-f .cena.foto{position:relative;background:#000}
+.ovo-f .cena.foto .fundo{position:absolute;left:-12%;top:-12%;width:124%;height:124%;object-fit:cover;filter:blur(18px) brightness(.5)}
+.ovo-f .cena.foto .frente{position:relative;object-fit:contain}
+.ovo-f [data-filme]{font-style:normal}
 .ovo-f a span{font-size:13px;color:var(--muted)}
 /* símbolo escondido do easter egg (caça ao símbolo) */
 .ovo-s{display:inline-grid;place-items:center;width:32px;height:32px;border-radius:50%;color:var(--faint);vertical-align:middle;flex:none;align-self:center}
