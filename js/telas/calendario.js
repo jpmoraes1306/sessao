@@ -20,7 +20,6 @@ export async function abrir(el, id, ctx) {
   let escolhido = hoje() >= inicio && hoje() <= fim ? hoje() : '';
   let estreias = [];
   let episodios = [];
-  let sessoes = [];
   let carregando = true;
 
   const porDia = (lista, campo = 'data') => { const mapa = {}; for (const x of lista) (mapa[x[campo]] = mapa[x[campo]] || []).push(x); return mapa; };
@@ -29,11 +28,9 @@ export async function abrir(el, id, ctx) {
     if (!ctx.vivo()) return;
     const e = porDia(estreias);
     const p = porDia(episodios);
-    const s = porDia(sessoes);
     const primeiro = new Date(a, m - 1, 1).getDay(); // 0 = domingo
     const celulas = [...Array(primeiro).fill(''), ...Array.from({ length: dias }, (_, i) => iso(a, m, i + 1))];
     const doDia = escolhido ? [
-      ...(s[escolhido] || []).map((x) => `<a class="li" href="#/${x.tipo}/${x.tmdb_id}">${poster({ titulo: x.titulo || '', poster: x.poster }, { tam: 'w154' })}<div><div class="t">${esc(x.titulo || 'Sem título')}</div><div class="s" style="color:var(--list)">Sessão de vocês${x.situacao === 'vista' ? ' · vista' : ''}</div></div></a>`),
       ...(p[escolhido] || []).map((x) => `<a class="li" href="#/serie/${x.serie.id}">${poster(x.serie, { tam: 'w154' })}<div><div class="t">${esc(x.serie.titulo)}</div><div class="s" style="color:var(--seen)">${cod(x.t, x.e)} · ${esc(x.nome)}</div></div></a>`),
       ...(e[escolhido] || []).map((x) => `<a class="li" href="#/filme/${x.id}">${poster(x, { tam: 'w154' })}<div><div class="t">${esc(x.titulo)}</div><div class="s">Estreia nos cinemas</div></div><span class="r">juntos<br><b class="junto">${dataCurta(proximaTerca(x.data))}</b></span></a>`),
     ] : [];
@@ -42,11 +39,11 @@ export async function abrir(el, id, ctx) {
       <div class="wrap" style="gap:16px"><div class="pessoa-topo" style="margin-top:-40px"><div><div class="eyebrow">Calendário</div><h1>${MESES[m - 1]} ${a}</h1></div></div>
         <div class="actions" style="justify-content:space-between"><a class="btn small" href="#/calendario/${vizinho(-1)}">‹ ${MESES[(m + 10) % 12]}</a><a class="btn small" href="#/calendario/${vizinho(1)}">${MESES[m % 12]} ›</a></div>
         <div class="cal"><div class="cal-s">${['D', 'S', 'T', 'Q', 'Q', 'S', 'S'].map((x) => `<span>${x}</span>`).join('')}</div>
-          <div class="cal-g">${celulas.map((d) => (d ? `<button class="cal-d${d === hoje() ? ' hoje' : ''}${d === escolhido ? ' on' : ''}" data-dia="${d}"><b>${Number(d.slice(8))}</b><span>${s[d] ? '<i class="ps"></i>' : ''}${p[d] ? '<i class="pe"></i>' : ''}${e[d] ? '<i class="pf"></i>' : ''}</span></button>` : '<span></span>')).join('')}</div></div>
-        <p class="note"><i class="pf leg"></i> estreia no cinema &nbsp; <i class="pe leg"></i> episódio novo &nbsp; <i class="ps leg"></i> sessão de vocês</p>
+          <div class="cal-g">${celulas.map((d) => (d ? `<button class="cal-d${d === hoje() ? ' hoje' : ''}${d === escolhido ? ' on' : ''}" data-dia="${d}"><b>${Number(d.slice(8))}</b><span>${p[d] ? '<i class="pe"></i>' : ''}${e[d] ? '<i class="pf"></i>' : ''}</span></button>` : '<span></span>')).join('')}</div></div>
+        <p class="note"><i class="pf legc"></i> estreia no cinema &nbsp; <i class="pe legc"></i> episódio novo das suas séries</p>
         ${carregando ? '<div class="skel txt"></div>' : ''}
         ${escolhido ? `<section><h2>${dataCurta(escolhido)}</h2>${doDia.length ? `<div class="list">${doDia.join('')}</div>` : '<p class="note">Nada marcado neste dia.</p>'}</section>` : '<p class="note">Toque num dia para ver o que tem.</p>'}
-        ${nuvem.usuario() ? '' : '<p class="note">Entre na sua conta para ver também os episódios das suas séries e as sessões de vocês.</p>'}
+        ${nuvem.usuario() ? '' : '<p class="note">Entre na sua conta para ver também os episódios das suas séries.</p>'}
       </div>`;
   }
 
@@ -61,20 +58,17 @@ export async function abrir(el, id, ctx) {
 
   desenhar();
   try {
-    const doMes = social.sessoesJuntos().filter((x) => x.data >= inicio && x.data <= fim);
-    const [filmes, eps, info] = await Promise.all([
+    const [filmes, eps] = await Promise.all([
       tmdb.estreiasEntre(inicio, fim),
       andamento.episodiosEntre(inicio, fim).catch(() => []),
-      dados.resumos(doMes).catch(() => new Map()),
     ]);
     estreias = filmes;
     episodios = eps;
-    sessoes = doMes.map((x) => ({ ...x, ...(info.get(`${x.tipo}:${x.tmdb_id}`) || {}) }));
   } catch (erro) {
     if (ctx.vivo()) el.innerHTML = erroFicha(erro);
     return;
   }
   carregando = false;
-  if (!escolhido) escolhido = [...estreias.map((x) => x.data), ...episodios.map((x) => x.data), ...sessoes.map((x) => x.data)].sort()[0] || '';
+  if (!escolhido) escolhido = [...estreias.map((x) => x.data), ...episodios.map((x) => x.data)].sort()[0] || '';
   desenhar();
 }

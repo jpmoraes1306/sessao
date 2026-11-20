@@ -4,7 +4,7 @@ import * as nuvem from '../nuvem.js';
 import * as dados from '../dados.js';
 import * as social from '../social.js';
 import * as curiosidades from '../curiosidades.js';
-import { $, esc, nota, notaMinha, dataBR, dataCurta, proximaTerca, toast, corDe, SETA } from '../ui.js';
+import { $, esc, nota, notaMinha, dataBR, toast, corDe } from '../ui.js';
 
 const avatar = (p) => {
   const [a, b] = corDe(p.nome);
@@ -28,42 +28,20 @@ function linhaDoOutro(tipo, id) {
 }
 
 /**
- * Grupo "vocês dois" da ficha (só com login): a nota do outro, a chave "Queremos ver juntos",
- * a chave de favorito e, nos filmes, a sessão para verem juntos (regra da terça).
+ * Grupo "vocês dois" da ficha (só com login): a nota do outro, a chave "Queremos ver juntos"
+ * e a chave de favorito.
  */
-export function grupoSocial(meta, opc = {}) {
+export function grupoSocial(meta) {
   if (!nuvem.usuario()) return '';
   const j = social.estaEmJuntos(meta.tipo, meta.id);
   const f = dados.ehFavorito(meta.tipo, meta.id);
-  let sessao = '';
-  if (meta.tipo === 'filme' && nuvem.outro()) {
-    const x = social.sessaoDe(meta.tipo, meta.id);
-    const terca = proximaTerca(opc.estreia || '');
-    if (!x) sessao = `<button class="lin" data-acao="sessao" data-data="${terca}"><span class="n">Marcar sessão juntos</span><span class="det">${dataCurta(terca)}</span>${SETA}</button>`;
-    else if (social.estadoDaSessao(x) === 'futura') sessao = `<button class="lin" data-acao="cancelar-sessao"><span class="n">Sessão marcada<small>Toque para cancelar</small></span><span class="det ok">${dataCurta(x.data)}</span></button>`;
-    else sessao = `<button class="lin" data-acao="vimos-juntos"><span class="n">${social.estadoDaSessao(x) === 'confirmar' ? 'Confirmar que vi junto' : 'Vimos juntos'}</span><span class="det">${dataCurta(x.data)}</span>${SETA}</button>`;
-  }
   return `<div class="grupo">${linhaDoOutro(meta.tipo, meta.id)}
     <button class="lin" data-acao="juntos" role="switch" aria-checked="${j}"><span class="n">Queremos ver juntos<small>Entra na lista Juntos, do Quero ver</small></span><span class="chave${j ? ' on' : ''}"></span></button>
     <button class="lin" data-acao="favorito" role="switch" aria-checked="${f}"><span class="n">Nos meus favoritos<small>Até 4, aparecem no seu perfil</small></span><span class="chave${f ? ' on' : ''}"></span></button>
-    ${sessao}</div>`;
+  </div>`;
 }
 /** Trata os toques nos botões extras. Devolve true se o toque era de um deles. */
 export async function tocarExtra(acao, meta, botao) {
-  if (acao === 'sessao') {
-    const ok = await social.marcarSessao(meta, botao.dataset.data);
-    toast(ok ? `Sessão marcada para ${dataCurta(botao.dataset.data)}` : 'Não deu para gravar');
-    return true;
-  }
-  if (acao === 'cancelar-sessao' || acao === 'vimos-juntos') {
-    const x = social.sessaoDe(meta.tipo, meta.id);
-    if (!x) return true;
-    if (acao === 'cancelar-sessao') { await social.cancelarSessao(x.id); toast('Sessão cancelada'); } else {
-      const ok = await social.vimosJuntos(x, meta);
-      toast(ok ? 'Entrou no seu diário. Agora é só dar a nota.' : 'Não deu para gravar');
-    }
-    return true;
-  }
   if (acao === 'juntos') {
     const sim = !social.estaEmJuntos(meta.tipo, meta.id);
     const ok = await social.marcarJuntos(meta, sim);

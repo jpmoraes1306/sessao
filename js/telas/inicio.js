@@ -7,7 +7,6 @@ import { temChaves } from '../config.js';
 import * as nuvem from '../nuvem.js';
 import * as social from '../social.js';
 import * as andamento from '../andamento.js';
-import * as especial from '../especial.js';
 import * as avisos from '../avisos.js';
 import { semChaves } from './comum.js';
 import { carinha } from '../ovo.js';
@@ -53,14 +52,14 @@ async function filmeDoDia() {
 }
 
 /* ---------- destaque: cartões que passam de lado ---------- */
-const partes = { dia: '', serie: '', sessao: '' }; // cada pedaço chega no seu tempo
+const partes = { dia: '', serie: '' }; // cada pedaço chega no seu tempo
 const fundoDe = (caminho, tam = 'w780') => (caminho ? `<img src="${tmdb.img(caminho, tam)}" alt="" crossorigin="anonymous" onerror="this.remove()">` : '');
 const cores = (titulo) => { const [a, b] = corDe(titulo || ''); return `style="--a:${a};--b:${b}"`; };
 
 function desenharDestaque(el) {
   const alvo = $('#destaque', el);
   if (!alvo) return;
-  const lista = [partes.dia, partes.serie, partes.sessao].filter(Boolean);
+  const lista = [partes.dia, partes.serie].filter(Boolean);
   if (!lista.length) { alvo.innerHTML = '<p class="note">Sem sugestão hoje.</p>'; return; }
   alvo.innerHTML = `<div class="row dest${lista.length === 1 ? ' um' : ''}" id="dest">${lista.join('')}</div>
     ${lista.length > 1 ? `<div class="pontos" aria-hidden="true">${lista.map((_, i) => `<i class="${i ? '' : 'on'}"></i>`).join('')}</div>` : ''}`;
@@ -120,72 +119,28 @@ async function emAndamento(el) {
   desenharDestaque(el);
 }
 
-/* ---------- sessões juntos (regra da terça) ---------- */
-const MES = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
-async function sessoesJuntos(el) {
-  const s = $('#sessoes-juntos', el);
-  if (!s || !nuvem.usuario()) return;
-  const lista = social.sessoesJuntos().filter((x) => social.estadoDaSessao(x) !== 'feita');
-  if (!lista.length) { s.hidden = true; s.innerHTML = ''; partes.sessao = ''; desenharDestaque(el); return; }
-  const info = await dados.resumos(lista);
-  if (!$('#sessoes-juntos', el)) return;
-  const outro = esc(nuvem.outro()?.nome || 'o outro');
-  const textoDe = (x) => ({ futura: `Marcada para ${dataCurta(x.data)} · ${contagem(x.data)}`, 'hoje-ou-passou': x.data === hoje() ? 'É hoje. Já viram?' : `Era ${dataCurta(x.data)}. Já viram?`, confirmar: `${outro} marcou que vocês viram em ${dataCurta(x.data)}` }[social.estadoDaSessao(x)]);
-  s.hidden = false;
-  s.innerHTML = `<h2>Sessões de vocês <small>para verem juntos</small></h2><div class="list">${lista.map((x) => {
-    const r = info.get(`${x.tipo}:${x.tmdb_id}`) || {};
-    const estado = social.estadoDaSessao(x);
-    const botoes = { futura: `<button class="btn small" data-acao="cancelar-sessao" data-id="${x.id}">Cancelar</button>`,
-      'hoje-ou-passou': `<button class="btn small on-seen" data-acao="vimos" data-id="${x.id}">Vimos</button><button class="btn small" data-acao="cancelar-sessao" data-id="${x.id}">Cancelar</button>`,
-      confirmar: `<button class="btn small on-seen" data-acao="vimos" data-id="${x.id}">Confirmar que vi</button>` }[estado];
-    return `<div class="li" style="grid-template-columns:36px 46px 1fr"><div class="date">${Number(x.data.slice(8))}<small>${MES[Number(x.data.slice(5, 7)) - 1]}</small></div>
-      <a href="#/${x.tipo}/${x.tmdb_id}">${poster({ titulo: r.titulo || '', poster: r.poster }, { tam: 'w154' })}</a>
-      <div><a class="t" href="#/${x.tipo}/${x.tmdb_id}" style="text-decoration:none">${esc(r.titulo || 'Sem título')}</a><div class="s">${textoDe(x)}</div><div class="actions" style="margin-top:6px">${botoes}</div></div></div>`;
-  }).join('')}</div>`;
-  const x = lista[0];
-  const r = info.get(`${x.tipo}:${x.tmdb_id}`) || {};
-  partes.sessao = `<a class="slide" href="#/${x.tipo}/${x.tmdb_id}" ${cores(r.titulo)}>${fundoDe(r.poster, 'w500')}
-    <div><div class="eyebrow">Sessão de vocês</div><div class="tt">${esc(r.titulo || 'Sem título')}</div><div class="s">${textoDe(x)}</div></div></a>`;
-  desenharDestaque(el);
-}
-
-/* ---------- data especial (tema do dia) ---------- */
-async function dataEspecial(el) {
-  const s = $('#data-especial', el);
-  const d = especial.deHoje();
-  if (!s || !d) return;
-  s.hidden = false;
-  s.innerHTML = `<div class="banner"><span><b>${esc(d.nome)}</b><br>Tema especial ligado.<span id="conta-especial"></span></span></div>`;
-  if (!d.pessoa) return;
-  try {
-    const p = await tmdb.pessoa(d.pessoa);
-    const vistos = p.creditos.filter((c) => dados.titulo(c.tipo, c.id).visto).length;
-    const alvo = $('#conta-especial', el);
-    if (alvo) alvo.innerHTML = ` Você já viu <b style="font:inherit;font-weight:600">${vistos}</b> título${vistos === 1 ? '' : 's'} com <a href="#/pessoa/${p.id}">${esc(p.nome)}</a>.`;
-  } catch { /* sem a contagem */ }
-}
-
 export function atualizar(el) {
   emAndamento(el).catch(() => {});
-  sessoesJuntos(el).catch(() => {});
   atividade(el).catch(() => {});
 }
 
-/* ---------- atividade de vocês dois ---------- */
-function tileFeed(a) {
-  const quem = a.eu ? 'Você' : a.nome;
-  const fez = a.nota != null ? `<span class="selo">${notaMinha(a.nota)}</span>` : a.visto ? 'viu' : a.seguindo ? 'segue' : '';
-  return `<a class="tile" href="#/${a.tipo}/${a.tmdb_id}" aria-label="${esc(quem)}: ${esc(a.titulo)}">${poster(a)}
-    <span class="leg"><i class="av ${a.eu ? '' : 'ele'}">${esc(quem[0])}</i><span class="n">${esc(quem)}</span>${fez}${a.curtido ? '<span class="heart" aria-label="curtiu">♥</span>' : ''}</span></a>`;
+/* ---------- atividade do outro (as suas ficam no seu Diário) ---------- */
+function tileFeed(a, o) {
+  const fez = a.nota != null ? `deu <span class="selo">${notaMinha(a.nota)}</span>` : a.visto ? 'viu' : a.seguindo ? 'acompanha' : a.curtido ? 'curtiu' : 'marcou';
+  // a miniatura é a foto de perfil do outro; sem foto, a inicial
+  const mini = o?.foto ? `<img class="av" src="${esc(o.foto)}" alt="" referrerpolicy="no-referrer" onerror="this.replaceWith(Object.assign(document.createElement('i'),{className:'av ele',textContent:this.dataset.l}))" data-l="${esc((a.nome || '?')[0])}">` : `<i class="av ele">${esc((a.nome || '?')[0])}</i>`;
+  return `<a class="tile" href="#/${a.tipo}/${a.tmdb_id}" aria-label="${esc(a.nome)}: ${esc(a.titulo)}">${poster(a)}
+    <span class="leg">${mini}<span class="n">${fez}</span>${a.curtido && a.nota != null ? '<span class="heart" aria-label="curtiu">♥</span>' : ''}</span></a>`;
 }
 
 async function atividade(el) {
   const s = $('#atividade', el);
-  if (!s || !nuvem.usuario()) return;
+  const o = nuvem.usuario() && nuvem.outro();
+  if (!s || !o) return;
   const itens = await social.feed(12);
   if (!$('#atividade', el) || !itens.length) return;
   s.hidden = false;
-  s.innerHTML = `<h2>Atividade <small>você e ${esc(nuvem.outro()?.nome || 'o outro')}</small></h2><div class="row">${itens.map(tileFeed).join('')}</div>`;
+  s.innerHTML = `<h2>Atividade <small>de ${esc(o.nome)}</small></h2><div class="row">${itens.map((a) => tileFeed(a, o)).join('')}</div>`;
   atalhos(el);
 }
 
@@ -193,7 +148,7 @@ async function atividade(el) {
 function atalhos(el) {
   const alvo = $('#atalhos', el);
   if (!alvo) return;
-  const lista = [['sessoes-juntos', 'Sessões'], ['atividade', 'Atividade'], ['em-andamento', 'Séries'], ['s-estreias', 'Estreias'], ['s-cartaz', 'Em cartaz'], ['s-alta', 'Em alta']]
+  const lista = [['atividade', 'Atividade'], ['em-andamento', 'Séries'], ['s-estreias', 'Estreias'], ['s-cartaz', 'Em cartaz'], ['s-alta', 'Em alta']]
     .filter(([id]) => { const s = document.getElementById(id); return s && !s.hidden; });
   alvo.innerHTML = lista.map(([id, n]) => `<button class="cap" data-ir="${id}">${n}</button>`).join('');
 }
@@ -206,12 +161,10 @@ export function render(el) {
     semChaves(el);
     return;
   }
-  partes.dia = ''; partes.serie = ''; partes.sessao = '';
+  partes.dia = ''; partes.serie = '';
   el.innerHTML = `
-    <section id="data-especial" hidden></section>
     <section id="destaque"><div class="slide skel"></div></section>
     <div class="caps" id="atalhos" role="group" aria-label="Ir para"></div>
-    <section id="sessoes-juntos" hidden></section>
     <section id="atividade" hidden></section>
     <section id="em-andamento" hidden></section>
     <section id="s-estreias"><h2>Próximas estreias <small><a class="link" href="#/calendario/${hoje().slice(0, 7)}">Calendário</a></small></h2><div id="estreias">${esqueleto()}</div></section>
@@ -220,7 +173,6 @@ export function render(el) {
     <p class="note">"Juntos" é a primeira terça-feira a partir da estreia. O filme do dia é o mesmo para vocês dois. Este app usa a API do TMDB, mas não é endossado nem certificado pelo TMDB.</p>${carinha('inicio')}`;
   atalhos(el);
   atualizar(el);
-  dataEspecial(el).catch(() => {});
 
   const erroTexto = (erro) => `<p class="note">${erro?.status === 401 ? 'A chave do TMDB foi recusada. Confira no Perfil.' : 'Não deu para carregar. Confira a internet.'}</p>`;
   const por = (sel, promessa, desenha) => promessa.then((lista) => {
@@ -232,7 +184,7 @@ export function render(el) {
   });
   const fileira = (lista) => `<div class="row">${lista.slice(0, 18).map((c) => tile(c)).join('')}</div>`;
 
-  // toques: cartões de série, sessões juntos, atalhos e o seletor do "Em alta"
+  // toques: cartões de série, atalhos e o seletor do "Em alta"
   el.onclick = async (e) => {
     const b = e.target.closest('button');
     if (!b) return;
@@ -249,23 +201,11 @@ export function render(el) {
       dados.marcarEpisodios(b.dataset.serie, [{ t: Number(b.dataset.t), e: Number(b.dataset.e) }], true);
       toast(`${cod(b.dataset.t, b.dataset.e)} visto`);
       emAndamento(el).catch(() => {});
-    } else if (b.dataset.acao === 'cancelar-sessao') {
-      await social.cancelarSessao(Number(b.dataset.id));
-      toast('Sessão cancelada');
-      sessoesJuntos(el).catch(() => {});
-    } else if (b.dataset.acao === 'vimos') {
-      const x = social.sessoesJuntos().find((y) => y.id === Number(b.dataset.id));
-      if (!x) return;
-      const r = (await dados.resumos([x])).get(`${x.tipo}:${x.tmdb_id}`) || {};
-      const ok = await social.vimosJuntos(x, { tipo: x.tipo, id: x.tmdb_id, titulo: r.titulo || '', ano: r.ano ?? null, data: r.data || '', poster: r.poster || '', duracao: r.duracao || 0, tmdb: r.nota || 0, pop: r.pop || 0, generos: r.generos || [] });
-      toast(ok ? 'Entrou no seu diário. Dê a sua nota na ficha.' : 'Não deu para gravar');
-      sessoesJuntos(el).catch(() => {});
-      if (ok) location.hash = `#/${x.tipo}/${x.tmdb_id}`;
     }
   };
 
   filmeDoDia().then((d) => { partes.dia = d ? slideDoDia(d) : ''; desenharDestaque(el); })
-    .catch((erro) => { const alvo = $('#destaque', el); if (alvo && !partes.serie && !partes.sessao) alvo.innerHTML = erroTexto(erro); });
+    .catch((erro) => { const alvo = $('#destaque', el); if (alvo && !partes.serie) alvo.innerHTML = erroTexto(erro); });
 
   por('#estreias', tmdb.estreias(), (lista) => `<div class="row">${lista.slice(0, 12).map((c) => `
     <a class="tile" href="${link(c)}" aria-label="${esc(c.titulo)}, estreia ${dataCurta(c.data)}">${poster(c).replace(/<\/div>$/, `<span class="dia">${dataCurta(c.data)}</span></div>`)}

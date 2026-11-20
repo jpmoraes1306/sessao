@@ -7,7 +7,7 @@ import * as nuvem from '../nuvem.js';
 import * as avisos from '../avisos.js';
 import { grupoSocial, tocarExtra, montarReviews, montarCuriosidades } from './comum.js';
 import { carinha } from '../ovo.js';
-import { $, esc, nota, notaMinha, selo, blocoNota, ligarReguas, poster, headshot, tile, linha, blocoNotas, blocoProvedores, blocoReviews, erroFicha, toast, duracao, dataCurta, proximaTerca, dolares, hoje, corDe, IC } from '../ui.js';
+import { $, esc, nota, notaMinha, selo, blocoNota, ligarReguas, poster, elencoJunto, tile, linha, blocoNotas, blocoProvedores, blocoReviews, erroFicha, toast, duracao, dataCurta, proximaTerca, dolares, hoje, corDe, IC } from '../ui.js';
 import { img } from '../tmdb.js';
 
 export const classificacao = (c) => (c ? (c === 'L' ? 'Livre' : /^\d+$/.test(c) ? `${c} anos` : c) : '');
@@ -95,7 +95,7 @@ export async function abrir(el, id, ctx) {
     </div>
     ${blocoNota(m.nota)}`;
   };
-  const social = () => grupoSocial(meta, { estreia: noCinema ? estreia : '' });
+  const social = () => grupoSocial(meta);
   const notas = () => blocoNotas(meu().nota, f.nota, notasFora, carregandoNotas);
 
   function dinheiro() {
@@ -132,7 +132,7 @@ export async function abrir(el, id, ctx) {
     ${noCinema ? `<div class="terca"><span class="eyebrow">Para verem juntos</span>
       <div>${aindaNaoSaiu || haDias < 0 ? `Estreia no Brasil ${dataCurta(estreia)}.` : `Em cartaz desde ${dataCurta(estreia)}.`} Terça sugerida: <b>${dataCurta(terca)}</b>.</div>
       ${haDias < 0 && nuvem.usuario() ? `<div class="actions" style="margin-top:6px" id="aviso-estreia"><button class="btn small ${avisos.pediuAviso(f.id) ? 'on-seen' : ''}" data-acao="avisar-estreia">${avisos.pediuAviso(f.id) ? '✓ Aviso ligado para a estreia' : 'Avisar na estreia'}</button></div>` : ''}</div>` : ''}
-    ${f.elenco.length || f.diretores.length ? `<section><h2>Elenco e direção <small>toque para ver os filmes</small></h2><div class="heads">${f.diretores.map((d) => headshot(d, 'Direção')).join('')}${f.elenco.map((p) => headshot(p, p.papel)).join('')}</div></section>` : ''}
+    ${f.elenco.length || f.diretores.length ? `<section><h2>Elenco e direção <small>toque para ver os filmes</small></h2><div class="heads">${elencoJunto(f.diretores, 'Direção', f.elenco)}</div></section>` : ''}
     <section><h2>Onde assistir <small>no Brasil</small></h2>${blocoProvedores(f.provedores)}</section>
     <section id="dinheiro">${dinheiro()}</section>
     <section id="premios" hidden></section>

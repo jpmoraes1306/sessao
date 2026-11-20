@@ -7,7 +7,6 @@ import * as tmdb from '../tmdb.js';
 import { img } from '../tmdb.js';
 import { carinha, dicaDeHoje } from '../ovo.js';
 import { chave, salvarChaves, MEUS_STREAMINGS, SERVICOS } from '../config.js';
-import * as especial from '../especial.js';
 import * as avisos from '../avisos.js';
 import { limpar as limparCache } from '../cache.js';
 import { $, esc, nota, notaMinha, selo, tile, poster, toast, corDe, hoje } from '../ui.js';
@@ -140,26 +139,17 @@ function ajustes() {
     </div>
   </section>
   ${u ? `<section><h2>Avisos neste aparelho</h2>
-    <div class="card" id="cartao-avisos"><p>Episódio novo das séries que você acompanha, estreia marcada com "Avisar" e a sessão do dia.</p><div class="skel txt"></div></div>
+    <div class="card" id="cartao-avisos"><p>Episódio novo das séries que você acompanha e estreia marcada com "Avisar".</p><div class="skel txt"></div></div>
   </section>` : ''}
   <section><h2>Seus streamings <small>${u ? 'toque para ligar ou desligar' : ''}</small></h2>
     <div class="card">${u ? `<div class="seg">${SERVICOS.map((s) => `<button data-streaming="${esc(s.nome)}" aria-pressed="${streamings.includes(s.nome)}">${esc(s.nome)}</button>`).join('')}</div>` : `<p>${esc(streamings.join(' · '))}</p>`}
       <p>Aparecem primeiro e com destaque em "Onde assistir" e valem para o filtro "Só nos meus streamings" da busca e do Quero ver.</p></div>
   </section>
-  <section><h2>Datas especiais</h2>
-    <div class="card"><p>Num dia cadastrado o app troca de tema e avisa no Início.</p>
-      ${nuvem.datasEspeciais().map((d, i) => `<div class="entre" style="align-items:center"><span style="color:var(--fg)"><b>${String(d.dia).padStart(2, '0')}/${String(d.mes).padStart(2, '0')}</b> · ${esc(d.nome)}</span>${u ? `<button class="btn small" data-acao="tirar-data" data-i="${i}">Tirar</button>` : ''}</div>`).join('')}
-      ${u ? `<form id="nova-data" style="display:flex;flex-direction:column;gap:8px">
-        <label class="campo">Nome da data<input name="nome" placeholder="Dia do Nicolas Cage" required maxlength="60"></label>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px"><label class="campo">Dia<input name="dia" type="number" min="1" max="31" required inputmode="numeric"></label><label class="campo">Mês<input name="mes" type="number" min="1" max="12" required inputmode="numeric"></label></div>
-        <label class="campo">Ator ou diretor (opcional)<input name="pessoa" placeholder="Nicolas Cage" maxlength="60"></label>
-        <div class="actions"><button class="btn small on-seen" type="submit">Adicionar data</button></div></form>` : ''}
-      <div class="actions"><button class="btn small" data-acao="previa-tema">${especial.emPrevia() ? 'Voltar ao tema normal' : 'Ver como fica o tema'}</button></div></div>
-  </section>
   <section><h2>Easter egg de hoje</h2>
     <div class="card"><p>O Dafoe e o Cage do dia estão escondidos em algum lugar do app. Cada dia num lugar diferente.</p>
       <div class="actions"><button class="btn small" data-acao="dica">Me dá uma dica</button></div></div>
   </section>
+  <details class="avancado" ${chave('tmdb') ? '' : 'open'}><summary><span>Avançado<small>Chaves das APIs e dados deste aparelho. Não é de uso diário.</small></span><svg class="vai" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></summary>
   <section><h2>Chaves das APIs</h2>
     <form class="card" id="chaves">
       <p>${u ? 'As chaves ficam guardadas na conta e chegam sozinhas em cada aparelho depois do login.' : 'Sem login, as chaves ficam só neste aparelho.'}</p>
@@ -174,6 +164,7 @@ function ajustes() {
     <div class="card"><p>O cache guarda o que já foi buscado para abrir rápido e funcionar sem internet.</p>
       <div class="actions"><button class="btn small" data-acao="limpar-cache">Limpar cache</button>${u ? '' : '<button class="btn small" data-acao="apagar-dados">Apagar minhas marcações</button>'}</div></div>
   </section>
+  </details>
   <p class="note">Dados e imagens: The Movie Database (TMDB). Este app usa a API do TMDB, mas não é endossado nem certificado pelo TMDB. Onde assistir: JustWatch. Notas IMDb, Rotten Tomatoes e Metacritic: OMDb API. Prêmios: Wikidata.</p>`;
 }
 
@@ -236,7 +227,7 @@ async function cartaoAvisos(el) {
   }[e];
   const botoes = { ligado: '<button class="btn small" data-acao="aviso-teste">Mandar um aviso de teste</button><button class="btn small" data-acao="avisos-desligar">Desligar</button>', desligado: '<button class="btn small on-seen" data-acao="avisos-ligar">Ativar avisos</button>' }[e] || '';
   if (!$('#cartao-avisos', el)) return;
-  c.innerHTML = `<p>Episódio novo das séries que você acompanha, estreia marcada com "Avisar" e a sessão do dia. Chegam às 9h.</p>
+  c.innerHTML = `<p>Episódio novo das séries que você acompanha e estreia marcada com "Avisar". Chegam às 9h.</p>
     <p class="${e === 'ligado' ? 'ok' : ''}" style="${e === 'ligado' ? '' : 'color:var(--fg)'}">${texto}</p>${botoes ? `<div class="actions">${botoes}</div>` : ''}`;
 }
 
@@ -255,25 +246,6 @@ function ligar(el) {
       salvarChaves(nova);
       if (nuvem.usuario()) await nuvem.banco().from('segredos').upsert([{ nome: 'tmdb', valor: nova.tmdb }, ...(nova.omdb ? [{ nome: 'omdb', valor: nova.omdb }] : [])]);
       toast('Chaves salvas');
-      render(el);
-    };
-  }
-
-  const novaData = $('#nova-data', el);
-  if (novaData) {
-    novaData.onsubmit = async (e) => {
-      e.preventDefault();
-      const f = new FormData(e.target);
-      const dia = Number(f.get('dia'));
-      const mes = Number(f.get('mes'));
-      const nome = String(f.get('nome') || '').trim();
-      if (!nome || !(dia >= 1 && dia <= 31) || !(mes >= 1 && mes <= 12)) { toast('Confira o nome, o dia e o mês'); return; }
-      let pessoa = null;
-      const quem = String(f.get('pessoa') || '').trim();
-      if (quem) { try { pessoa = (await tmdb.buscar(quem, 'pessoa'))[0]?.id || null; } catch { /* fica sem pessoa */ } }
-      const ok = await nuvem.salvarDatas([...nuvem.datasEspeciais(), { dia, mes, nome, pessoa }].sort((x, y) => x.mes - y.mes || x.dia - y.dia));
-      toast(ok ? 'Data adicionada' : 'Não deu para gravar');
-      especial.aplicarTema();
       render(el);
     };
   }
@@ -310,14 +282,6 @@ function ligar(el) {
       b.disabled = true;
       try { const n = await avisos.testar(); toast(n ? 'Aviso de teste enviado' : 'Nenhum aparelho recebeu. Desligue e ative de novo.'); } catch { toast('Não deu para mandar o teste'); }
       b.disabled = false;
-    } else if (acao === 'tirar-data') {
-      const ok = await nuvem.salvarDatas(nuvem.datasEspeciais().filter((_, i) => i !== Number(b.dataset.i)));
-      toast(ok ? 'Data tirada' : 'Não deu para gravar');
-      especial.aplicarTema();
-      render(el);
-    } else if (acao === 'previa-tema') {
-      especial.alternarPrevia();
-      render(el);
     } else if (acao === 'dica') {
       b.outerHTML = `<p style="color:var(--fg)">Hoje: ${dicaDeHoje()}.</p>`;
     } else if (acao === 'limpar-cache') {

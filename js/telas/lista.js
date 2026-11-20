@@ -5,8 +5,9 @@ import * as nuvem from '../nuvem.js';
 import * as social from '../social.js';
 import * as mix from '../mix.js';
 import * as streaming from '../streaming.js';
+import * as notasfora from '../notasfora.js';
 import { carinha } from '../ovo.js';
-import { esc, nota, tile, duracao } from '../ui.js';
+import { esc, tile } from '../ui.js';
 
 const filtro = { lista: 'minha', ordem: 'recentes', genero: '', epoca: '', meus: false };
 let vez = 0;
@@ -86,23 +87,25 @@ export async function render(el) {
   if (filtro.genero && !generos.includes(filtro.genero)) filtro.genero = '';
   if (filtro.epoca && !decadas.includes(filtro.epoca)) filtro.epoca = '';
 
+  // "maior nota" e "menor nota" usam a média de IMDb, Rotten e Metacritic; o TMDB só entra quando não há nenhuma
+  let compara = COMPARA[filtro.ordem];
+  if ((filtro.ordem === 'nota' || filtro.ordem === 'nota-menor') && todos.length) {
+    if (notasfora.faltam(todos)) esperando('Buscando as notas do IMDb, Rotten Tomatoes e Metacritic…');
+    const ref = await notasfora.paraLista(todos, (feito, total) => { const b = document.getElementById('andamento-filtro'); if (b) b.style.width = `${(feito / total) * 100}%`; });
+    if (minhaVez !== vez) return;
+    compara = filtro.ordem === 'nota' ? (a, b) => ref(b).nota - ref(a).nota : (a, b) => (ref(a).nota || 99) - (ref(b).nota || 99);
+  }
+
   const itens = todos
     .filter((t) => !filtro.genero || (t.generos || []).includes(filtro.genero))
     .filter((t) => !filtro.epoca || decada(t.ano) === filtro.epoca)
-    .sort(COMPARA[filtro.ordem]);
+    .sort(compara);
   const filmes = itens.filter((t) => t.tipo === 'filme').length;
   const series = itens.length - filmes;
   const horas = Math.round(itens.reduce((s, t) => s + (t.duracao || 0), 0) / 60);
   const resumo = [filmes ? `${filmes} filme${filmes > 1 ? 's' : ''}` : '', series ? `${series} série${series > 1 ? 's' : ''}` : '', horas ? `${horas} h de filme` : ''].filter(Boolean).join(' · ');
   const opcoes = (lista, atual) => lista.map(([v, r]) => `<option value="${esc(v)}" ${v === atual ? 'selected' : ''}>${esc(r)}</option>`).join('');
   const ehMix = filtro.lista === 'mix';
-  // o que aparece embaixo do pôster: no Mix, o motivo; com o filtro de streaming, o serviço; senão, acompanha a ordenação
-  const sob = (t) => {
-    if (ehMix && filtro.ordem === 'recentes' && !filtro.meus) return esc(t.motivo || '');
-    if (filtro.meus && t.onde) return `<span class="ok">${esc(t.onde)}</span>${t.duracao ? ` · ${duracao(t.duracao)}` : ''}`;
-    if (filtro.ordem === 'novos' || filtro.ordem === 'antigos') return [t.ano, t.tmdb ? `TMDB ${nota(t.tmdb)}` : ''].filter(Boolean).join(' · ');
-    return [t.tmdb ? `TMDB ${nota(t.tmdb)}` : '', t.duracao ? duracao(t.duracao) : (t.ano || '')].filter(Boolean).join(' · ');
-  };
   const semFiltro = dadosDaLista.itens.length;
   const VAZIO = {
     minha: `<div class="vazio"><b>Sua lista está vazia</b>Na ficha de um filme ou de uma série, toque em "Quero ver".<a class="btn small" href="#/buscar">Buscar um título</a></div>`,
@@ -126,7 +129,7 @@ export async function render(el) {
       <label>Ano<select name="epoca">${opcoes([['', 'Todas as décadas'], ...decadas.map((d) => [d, `Anos ${d}`])], filtro.epoca)}</select></label>
       <button data-meus aria-pressed="${filtro.meus}">Meus streamings</button>
     </div>${explica}
-    ${itens.length ? `<div class="grid3">${itens.slice(0, 300).map((t) => tile(t, sob(t))).join('')}</div>${itens.length > 300 ? `<p class="note">Mostrando 300 de ${itens.length}. Use os filtros para ver o resto.</p>` : ''}`
+    ${itens.length ? `<div class="grid4">${itens.slice(0, 400).map((t) => tile(t)).join('')}</div>${itens.length > 400 ? `<p class="note">Mostrando 400 de ${itens.length}. Use os filtros para ver o resto.</p>` : ''}`
       : `<p class="note">${filtro.meus && !todos.length ? 'Nada desta lista está nos seus streamings agora.' : 'Nenhum título com esse filtro.'}</p>`}`
     : VAZIO[filtro.lista]}
     ${logado ? '' : '<p class="note">Sem login, a lista fica só neste aparelho. Entre no Perfil para ver também a do outro, a "juntos" e o Mix.</p>'}`, resumo);

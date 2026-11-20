@@ -5,7 +5,7 @@ import * as dados from '../dados.js';
 import * as nuvem from '../nuvem.js';
 import { grupoSocial, tocarExtra, montarReviews, montarCuriosidades } from './comum.js';
 import { carinha } from '../ovo.js';
-import { $, esc, nota, notaMinha, selo, blocoNota, ligarReguas, poster, headshot, tile, blocoNotas, blocoProvedores, blocoReviews, erroFicha, toast, perguntar, dataCurta, contagem, hoje, corDe, IC } from '../ui.js';
+import { $, esc, nota, notaMinha, selo, blocoNota, ligarReguas, poster, elencoJunto, tile, blocoNotas, blocoProvedores, blocoReviews, erroFicha, toast, perguntar, dataCurta, contagem, hoje, corDe, IC } from '../ui.js';
 import { img } from '../tmdb.js';
 import { secaoPremios, classificacao } from './filme.js';
 
@@ -214,7 +214,7 @@ export async function abrir(el, id, ctx) {
     <section><h2>Seu progresso</h2><div id="progresso">${progresso()}</div></section>
     <section><h2>Temporadas <small>toque para ver os episódios</small></h2><div id="temporadas">${temporadas()}</div>
       ${nuvem.usuario() ? '' : '<p class="note">Sem login, o que você marca fica salvo só neste aparelho.</p>'}</section>
-    ${s.elenco.length || s.criadores.length ? `<section><h2>Elenco e criação</h2><div class="heads">${s.criadores.map((c) => headshot(c, 'Criação')).join('')}${s.elenco.map((p) => headshot(p, p.papel || (p.eps ? `${p.eps} eps` : ''))).join('')}</div></section>` : ''}
+    ${s.elenco.length || s.criadores.length ? `<section><h2>Elenco e criação</h2><div class="heads">${elencoJunto(s.criadores, 'Criação', s.elenco, (p) => p.papel || (p.eps ? `${p.eps} eps` : ''))}</div></section>` : ''}
     <section><h2>Onde assistir <small>no Brasil</small></h2>${blocoProvedores(s.provedores)}</section>
     <section id="premios" hidden></section>
     <section id="curiosidades" hidden></section>
