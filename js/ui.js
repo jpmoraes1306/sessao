@@ -40,13 +40,39 @@ export function selo(n, vazio = '') {
   if (n == null) return vazio ? `<span class="dim">${vazio}</span>` : '';
   return `<span class="selo" aria-label="nota ${notaMinha(n)} de 10">${notaMinha(n)}</span>`;
 }
-/** Seletor de 0 a 10. Tocar na nota já escolhida tira a nota. */
-export function seletorNota(r) {
-  return `<div class="nota-sel" role="group" aria-label="Nota de 0 a 10">${Array.from({ length: 11 }, (_, i) => `<button data-r="${i}" class="${r != null && i <= r ? 'ate' : ''}${r === i ? ' on' : ''}" aria-pressed="${r === i}">${i}</button>`).join('')}</div>`;
-}
-/** Bloco "Sua nota" com o seletor. `alvo` vira data-* para a tela saber de quem é a nota. */
+const MARCAS = Array.from({ length: 11 }, (_, i) => `<span>${i % 5 === 0 ? i : ''}</span>`).join('');
+/** Bloco "Sua nota": o número grande e uma régua de arrastar de 0 a 10. `alvo` vira data-* para a
+    tela saber de quem é a nota. Quem grava é a tela, por `ligarReguas`; "Tirar nota" é um botão data-r="tirar". */
 export function blocoNota(r, rotulo = 'Sua nota', alvo = '') {
-  return `<div class="rate" ${alvo}><span>${rotulo}<b>${r != null ? notaMinha(r) : ''}</b></span>${seletorNota(r)}</div>`;
+  const menor = /temporada|episodio/.test(alvo);
+  const v = r == null ? 0 : Math.round(r);
+  return `<div class="rate${menor ? ' menor' : ''}" ${alvo}>
+    <div class="rate-t"><span>${rotulo}</span><output class="rate-n${r != null ? ' tem' : ''}">${r != null ? notaMinha(r) : '—'}</output></div>
+    <input type="range" class="regua${r == null ? ' vazia' : ''}" min="0" max="10" step="1" value="${v}" style="--p:${v * 10}%" aria-label="${rotulo}, de 0 a 10">
+    <div class="marcas" aria-hidden="true">${MARCAS}</div>
+    <div class="rate-d"><span>${r == null ? 'Arraste a bolinha para dar a nota' : ''}</span>${r != null ? '<button class="texto" data-r="tirar">Tirar nota</button>' : ''}</div></div>`;
+}
+/** Liga as réguas de nota de uma tela: o número acompanha o dedo e, ao soltar, chama aoGravar(nota, régua). */
+export function ligarReguas(raiz, aoGravar) {
+  raiz.oninput = (e) => {
+    const x = e.target;
+    if (!x.classList?.contains('regua')) return;
+    x.dataset.mexeu = '1';
+    x.style.setProperty('--p', `${x.value * 10}%`);
+    x.classList.remove('vazia');
+    const n = x.closest('.rate')?.querySelector('.rate-n');
+    if (n) { n.textContent = x.value; n.classList.add('tem'); }
+  };
+  // "change" não dispara quando a pessoa arrasta e volta para o valor de antes (ex.: dar nota 0), por isso também ao soltar
+  const soltar = (e) => {
+    const x = e.target;
+    if (!x.classList?.contains('regua') || !x.dataset.mexeu) return;
+    delete x.dataset.mexeu;
+    aoGravar(Number(x.value), x);
+  };
+  raiz.onchange = soltar;
+  raiz.onpointerup = soltar;
+  raiz.ontouchend = soltar;
 }
 
 /* ---------- regra da terça ---------- */
@@ -108,14 +134,18 @@ export function situacao(c) {
 }
 
 /* ---------- blocos da ficha ---------- */
+const BAIXO = '<svg class="vai" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>';
+export const SETA = '<svg class="vai" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>';
+/** Notas de outros sites numa linha só (IMDb, Rotten, Metacritic, TMDB). Tocar abre o detalhe. */
 export function blocoNotas(minha, tmdbNota, omdb, carregando) {
-  const v = (x, f) => (x != null && x !== 0 ? f(x) : (carregando ? '…' : '–'));
-  return `
-    <div class="score"><b style="color:var(--star)">${minha != null ? notaMinha(minha) : '–'}</b><span>Sua nota</span></div>
-    <div class="score"><b>${v(omdb?.imdb, nota)}</b><span>IMDb</span></div>
-    <div class="score"><b style="color:var(--rt)">${v(omdb?.rotten, (x) => `${x}%`)}</b><span>Rotten</span></div>
-    <div class="score"><b>${v(omdb?.metacritic, (x) => x)}</b><span>Metacritic</span></div>
-    <div class="score"><b>${tmdbNota ? nota(tmdbNota) : '–'}</b><span>TMDB</span></div>`;
+  const itens = [];
+  const mais = [];
+  if (omdb?.imdb) { itens.push(`<span class="nf"><i class="m imdb">IMDb</i>${nota(omdb.imdb)}</span>`); mais.push(`<span><b>IMDb ${nota(omdb.imdb)}</b>${omdb.imdbVotos ? ` · ${Number(omdb.imdbVotos).toLocaleString('pt-BR')} votos` : ''}</span>`); }
+  if (omdb?.rotten != null) { itens.push(`<span class="nf"><i class="m tom"></i>${omdb.rotten}%</span>`); mais.push(`<span><b>Rotten Tomatoes ${omdb.rotten}%</b> · críticas positivas</span>`); }
+  if (omdb?.metacritic) { itens.push(`<span class="nf"><i class="m mc">${omdb.metacritic}</i><small>Meta</small></span>`); mais.push(`<span><b>Metacritic ${omdb.metacritic}</b> · de 0 a 100</span>`); }
+  if (tmdbNota) { itens.push(`<span class="nf"><i class="m tm">TMDB</i>${nota(tmdbNota)}</span>`); mais.push(`<span><b>TMDB ${nota(tmdbNota)}</b> · nota do público</span>`); }
+  if (!itens.length) return carregando ? '<div class="skel txt" style="width:70%"></div>' : '<p class="note">Sem notas de outros sites por enquanto.</p>';
+  return `<details class="notas"><summary aria-label="Notas de outros sites. Toque para ver o detalhe.">${itens.join('')}${carregando ? '<span class="nf dim">…</span>' : ''}${BAIXO}</summary><div class="notas-mais">${mais.join('')}</div></details>`;
 }
 
 // Os dados já vêm só do Brasil (JustWatch BR). Aqui saem os "canais" revendidos dentro de outro
@@ -145,12 +175,12 @@ export function blocoProvedores(bruto) {
 }
 
 export function blocoReviews(lista) {
-  return `<div class="facts">${lista.slice(0, 5).map((r) => `<div class="fact"><div class="who"><b>${esc(r.autor)}</b><span>${r.nota != null ? `<span class="selo">${notaMinha(r.nota)}</span> · ` : ''}${dataBR(r.data)}</span></div><div class="txt${r.texto.length > 380 ? ' clamp' : ''}">${esc(r.texto)}</div>${r.texto.length > 380 ? '<button class="mais" data-acao="abrir-texto">ler tudo</button>' : ''}</div>`).join('')}</div>`;
+  return `<div class="facts">${lista.slice(0, 5).map((r) => `<div class="fact"><div class="who"><b>${esc(r.autor)}</b><span>${r.nota != null ? `<span class="selo">${notaMinha(r.nota)}</span> · ` : ''}${dataBR(r.data)}</span></div><div class="txt${r.texto.length > 380 ? ' clamp' : ''}">${esc(r.texto)}</div>${r.texto.length > 380 ? '<button class="mais" data-acao="abrir-texto">Ler mais</button>' : ''}</div>`).join('')}</div>`;
 }
 
 export const esqueletoFicha = () => `
   <div class="backdrop"></div><button class="back" data-acao="voltar" aria-label="Voltar">‹</button>
-  <div class="wrap"><div class="head"><div><div class="skel tit" style="margin:44px 0 10px"></div><div class="skel txt" style="width:55%"></div></div><div class="poster skel" style="--a:transparent;--b:transparent"></div></div>
+  <div class="wrap"><div class="head"><div><div class="skel tit" style="margin:0 0 10px"></div><div class="skel txt" style="width:55%"></div></div><div class="poster skel" style="--a:transparent;--b:transparent"></div></div>
   <div class="skel txt"></div><div class="skel txt" style="width:92%"></div><div class="skel txt" style="width:60%"></div></div>`;
 
 export function erroFicha(erro) {

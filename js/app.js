@@ -20,6 +20,7 @@ import { carinha } from './ovo.js';
 import * as nuvem from './nuvem.js';
 
 const ABAS = { inicio, buscar, lista, diario, perfil };
+const NOMES = { inicio: 'Início', buscar: 'Buscar', lista: 'Quero ver', diario: 'Diário', perfil: 'Perfil' };
 const FICHAS = { filme, serie, pessoa, importar, calendario };
 
 const view = $('#view');
@@ -51,6 +52,9 @@ async function navegar() {
     document.body.style.overflow = 'hidden';
     sheet.onclick = null;
     sheet.onchange = null;
+    sheet.oninput = null;
+    sheet.onpointerup = null;
+    sheet.ontouchend = null;
     sheet.innerHTML = esqueletoFicha();
     sheet.scrollTop = 0;
     const ctx = { vivo: () => minhaVez === vez };
@@ -72,6 +76,7 @@ async function navegar() {
   const vindoDeFicha = onde?.tipo === 'ficha';
   onde = { tipo: 'aba', hash: `#/${nome}` };
   $$('.tabs a').forEach((a) => (a.dataset.tab === nome ? a.setAttribute('aria-current', 'page') : a.removeAttribute('aria-current')));
+  $('#titulo-texto').textContent = NOMES[nome];
   if (abaNaTela === nome && ABAS[nome].manter) {
     ABAS[nome].atualizar?.(view); // volta para a mesma aba: mantém o que estava, só atualiza o que mudou
   } else {
@@ -105,8 +110,8 @@ $('.tabs').addEventListener('click', (e) => {
   if (a && a.getAttribute('href') === location.hash && sheet.hidden) window.scrollTo({ top: 0, behavior: 'smooth' });
 });
 
-// easter egg: se hoje a carinha estiver escondida no topo, ela aparece ao lado do logo
-$('.logo').insertAdjacentHTML('afterend', carinha('logo'));
+// o título grande do topo muda com a aba; se hoje a carinha do easter egg estiver escondida no topo, ela fica ao lado dele
+$('#titulo').innerHTML = `<span id="titulo-texto">Início</span>${carinha('logo')}`;
 
 window.addEventListener('hashchange', () => { passos++; navegar(); });
 
@@ -114,8 +119,9 @@ window.addEventListener('hashchange', () => { passos++; navegar(); });
 function mostrarLogin() {
   const u = nuvem.usuario();
   const chip = $('#chip');
-  chip.textContent = u ? u.nome.split(' ')[0] : 'Entrar';
+  chip.textContent = u ? u.nome.trim()[0].toUpperCase() : 'Entrar';
   chip.classList.toggle('on', Boolean(u));
+  chip.setAttribute('aria-label', u ? `Perfil de ${u.nome}` : 'Entrar');
 }
 let quemEra = null;
 let pronto = false; // vira true depois da primeira tela
