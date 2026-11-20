@@ -34,6 +34,9 @@ export async function abrir(el, rota, ctx) {
   let nome = existente?.nome || '';
   let comOrdem = existente ? existente.ranqueada : true;
   let mudou = false;
+  let idSalvo = existente?.id; // numa lista nova, o número que a conta deu (para salvar de novo sem criar outra)
+  // com mudança por salvar, o app não refaz esta tela sozinho quando os dados da conta chegam (ver refazerAba em app.js)
+  const sujar = () => { mudou = true; $('.barra-ed', el)?.setAttribute('data-sem-refazer', ''); };
   let salvando = false;
   let achados = null;      // null = sem busca (mostra sugestões); 'erro'; ou a lista de resultados
   let buscando = false;
@@ -98,12 +101,12 @@ export async function abrir(el, rota, ctx) {
   desenharAchados();
 
   ligarArrasto(el, '#lista-ed .rk-l', ALTURA, (de, para) => {
-    if (de !== para) { ordem.splice(para, 0, ordem.splice(de, 1)[0]); mudou = true; }
+    if (de !== para) { ordem.splice(para, 0, ordem.splice(de, 1)[0]); sujar(); }
     const r = el.scrollTop; desenharItens(); el.scrollTop = r;
   });
 
   el.oninput = (e) => {
-    if (e.target.id === 'ed-nome') { nome = e.target.value; mudou = true; return; }
+    if (e.target.id === 'ed-nome') { nome = e.target.value; sujar(); return; }
     if (e.target.id !== 'ed-q') return;
     clearTimeout(espera);
     const texto = e.target.value.trim();
@@ -124,12 +127,12 @@ export async function abrir(el, rota, ctx) {
   el.onclick = async (e) => {
     const b = e.target.closest('button');
     if (!b || salvando) return;
-    if (b.dataset.tira) { ordem = ordem.filter((c) => K(c) !== b.dataset.tira); mudou = true; redesenhar(); return; }
+    if (b.dataset.tira) { ordem = ordem.filter((c) => K(c) !== b.dataset.tira); sujar(); redesenhar(); return; }
     if (b.dataset.poe) {
       const c = conhecidos.get(b.dataset.poe);
       if (!c || cheio() || ordem.some((x) => K(x) === K(c))) return;
       ordem.push({ tipo: c.tipo, id: c.id, titulo: c.titulo, ano: c.ano ?? null, poster: c.poster || '' });
-      mudou = true;
+      sujar();
       // o resumo completo (duração, gêneros, elenco) vai para a conta, para o outro ver o título e o pôster
       if (nuvem.usuario()) completando.push(tmdb.resumo(c.tipo, c.id).then((r) => dados.guardarResumo(c.tipo, c.id, r)).catch(() => {}));
       redesenhar();
@@ -137,7 +140,7 @@ export async function abrir(el, rota, ctx) {
     }
     const acao = b.dataset.ed;
     if (acao === 'ordem') {
-      comOrdem = !comOrdem; mudou = true;
+      comOrdem = !comOrdem; sujar();
       b.setAttribute('aria-checked', comOrdem);
       b.querySelector('.chave').classList.toggle('on', comOrdem);
       redesenhar();
@@ -152,7 +155,7 @@ export async function abrir(el, rota, ctx) {
       if (favoritos) dados.definirFavoritos(ordem);
       else {
         for (const c of ordem) await dados.garantirResumo(c).catch(() => {}); // sem o completo, vai o básico (título e pôster)
-        problema = await listas.salvar({ id: existente?.id, nome, ranqueada: comOrdem, itens: ordem });
+        problema = await listas.salvar({ id: idSalvo, nome, ranqueada: comOrdem, itens: ordem, aoCriar: (novo) => { idSalvo = novo; } });
       }
       salvando = false;
       if (!ctx.vivo()) return; // a pessoa saiu da tela enquanto salvava

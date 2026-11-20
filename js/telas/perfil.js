@@ -16,6 +16,8 @@ const mascara = (k) => (k ? `${'•'.repeat(Math.max(0, k.length - 4))}${k.slice
 let vendo = null;   // id do perfil na tela (null = o seu)
 /** Na próxima vez que o Perfil abrir, mostra o da pessoa com este id (o outro) em vez do seu. */
 export const verPerfilDe = (id) => { vendo = id || null; };
+// foi para outra aba: da próxima vez o Perfil abre no seu (abrir uma ficha a partir do perfil do outro não muda nada)
+if (typeof window !== 'undefined') window.addEventListener('hashchange', () => { if (/^#\/(inicio|buscar|lista|diario)\b/.test(location.hash)) vendo = null; });
 let vez = 0;
 const fotos = new Map(); // id da pessoa no TMDB -> caminho da foto
 const K = (tipo, id) => `${tipo}:${id}`;
@@ -404,8 +406,18 @@ function ligar(el) {
       const caixa = b.closest('.temp');
       if (caixa.classList.toggle('aberta')) {
         caixa.insertAdjacentHTML('beforeend', '<div class="temp-c"><div class="skel txt"></div></div>');
-        const { data } = await nuvem.banco().from('lista_itens').select('posicao, tipo, tmdb_id').eq('lista_id', b.dataset.id).order('posicao');
-        const info = await dados.resumos(data || []);
+        let data; let info;
+        try {
+          const r = await nuvem.banco().from('lista_itens').select('posicao, tipo, tmdb_id').eq('lista_id', b.dataset.id).order('posicao');
+          if (r.error) throw r.error;
+          data = r.data || [];
+          info = await dados.resumos(data);
+        } catch {
+          // falha de leitura não é "lista vazia": diz o que houve e deixa tentar de novo (fechar e abrir)
+          const c = caixa.querySelector('.temp-c');
+          if (c) c.innerHTML = '<p class="note">Não deu para abrir a lista. Confira a internet e toque de novo.</p>';
+          return;
+        }
         const corpo = caixa.querySelector('.temp-c');
         // a lista é sua: dá para trocar a ordem, pôr e tirar títulos
         const editar = vendo ? '' : `<a class="texto" href="#/editar/lista-${Number(b.dataset.id)}" style="display:block;padding:4px 0 8px">Editar esta lista</a>`;

@@ -6,6 +6,7 @@ import * as tmdb from '../tmdb.js';
 import * as dados from '../dados.js';
 import * as nuvem from '../nuvem.js';
 import * as social from '../social.js';
+import * as jogos from '../jogos.js';
 import { $, esc, rodada, numeroDaRodada, proximaTroca, jogoDoDia, NOME_DO_JOGO, toast } from '../ui.js';
 import { img } from '../tmdb.js';
 
@@ -56,11 +57,12 @@ async function quadroServe(url) {
 }
 
 /** Escolhe o quadro de um título: primeiro uma cena de clipe ou trailer; sem vídeo (só filme), uma imagem do TMDB que não seja pôster. */
-async function escolherQuadro(tipo, id, n) {
-  const deVideo = await (tipo === 'serie' ? tmdb.quadrosDaSerie(id) : tmdb.quadrosDoFilme(id)).catch(() => []);
+async function escolherQuadro(tipo, id, n, falhas) {
+  // `falhas` conta os pedidos que deram erro (TMDB fora do ar, internet), para não confundir com "título sem cena"
+  const deVideo = await (tipo === 'serie' ? tmdb.quadrosDaSerie(id) : tmdb.quadrosDoFilme(id)).catch(() => { falhas.n++; return []; });
   for (const url of deVideo.slice(0, 9)) if (await quadroServe(url)) return url;
   if (tipo === 'serie') return '';
-  const doTmdb = (await tmdb.cenasDoFilme(id).catch(() => [])).slice(0, 8);
+  const doTmdb = (await tmdb.cenasDoFilme(id).catch(() => { falhas.n++; return []; })).slice(0, 8);
   const comeco = doTmdb.length ? n % doTmdb.length : 0;
   for (const caminho of [...doTmdb.slice(comeco), ...doTmdb.slice(0, comeco)]) if (await quadroServe(img(caminho, 'w300'))) return caminho;
   return '';
@@ -85,8 +87,9 @@ async function sortear(b, dia) {
   const n = numeroDaRodada(dia);
   const livres = filmes.filter((f) => !usados.has(f.id));
   const fila = embaralhar(livres.length >= MINIMO ? livres : filmes, n);
+  const falhas = { n: 0 };
   for (const certo of fila.slice(0, 12)) {
-    const imagem = await escolherQuadro(certo.tipo, certo.id, n);
+    const imagem = await escolherQuadro(certo.tipo, certo.id, n, falhas);
     if (!imagem) continue;
     // opções erradas: da mesma época quando dá, sem franquia repetida (dois "Harry Potter" entregam a resposta)
     const erradas = [];
@@ -106,10 +109,13 @@ async function sortear(b, dia) {
       foco: `${30 + (sorteio(n, 5) % 41)}% ${36 + (sorteio(n, 9) % 25)}%`,
       opcoes: [certo, ...erradas].sort((a, c) => a.titulo.localeCompare(c.titulo)),
     };
-    await b.from('frame_dia').upsert(linha, { onConflict: 'dia', ignoreDuplicates: true });
+    const gravou = await b.from('frame_dia').upsert(linha, { onConflict: 'dia', ignoreDuplicates: true });
     const { data } = await b.from('frame_dia').select('*').eq('dia', dia).maybeSingle();
-    return data || linha;
+    // só vale o quadro que está na conta: jogar um que não foi gravado daria um quadro diferente para cada um
+    if (!data) throw new Error(gravou.error?.message || 'o quadro não foi gravado');
+    return data;
   }
+  if (falhas.n) throw new Error('o sorteio parou por erro de rede');
   return { poucos: 0 };
 }
 
@@ -127,6 +133,8 @@ export async function abrir(el, _id, ctx) {
     F = data || await sortear(b, dia);
     if (!ctx.vivo()) return;
     if (F.poucos != null) { el.innerHTML = aviso('Ainda faltam títulos em comum', `O jogo usa só filmes e séries que os dois já viram, e precisa de pelo menos ${MINIMO} com cena disponível.`); return; }
+    await jogos.reenviar(); // resultado que ficou sem subir (a internet caiu na hora) vai antes de ler o placar
+    if (!ctx.vivo()) return;
     const { data: linhas, error } = await b.from('frame_jogadas').select('dia, user_id, tentativas, acertou').gte('dia', `${dia.slice(0, 7)}-01`);
     if (error) throw error;
     mes = linhas || [];
@@ -140,14 +148,15 @@ export async function abrir(el, _id, ctx) {
 
   const certo = F.opcoes.find((x) => x.id === F.tmdb_id);
   let minha = jogadas.find((j) => j.user_id === u.id) || null;
+  if (!minha) { // terminou, mas a conta ainda não confirmou: o jogo desta rodada já está jogado
+    minha = jogos.guardado('frame_jogadas', dia);
+    if (minha) { jogadas.push(minha); mes.push(minha); }
+  }
   let erradas = [];
   // o aparelho guarda as tentativas de hoje e o resultado; se a gravação na conta falhar, o resultado vale
-  // mesmo assim (não dá para jogar de novo) e sobe na próxima vez que a tela abrir
+  // mesmo assim (não dá para jogar de novo) e sobe sozinho depois, mesmo que a rodada troque (ver jogos.js)
   const guardar = (fim) => { try { localStorage.setItem(LOCAL, JSON.stringify({ dia, de: u.id, erradas, ...(fim ? { fim } : {}) })); } catch { /* vale só nesta visita */ } };
-  const gravar = async () => {
-    const { error } = await b.from('frame_jogadas').upsert(minha, { onConflict: 'dia,user_id', ignoreDuplicates: true });
-    return !error;
-  };
+  const gravar = () => jogos.mandar('frame_jogadas', minha);
   try {
     const g = JSON.parse(localStorage.getItem(LOCAL) || 'null');
     if (g?.dia === dia && g.de === u.id) {
@@ -219,7 +228,7 @@ export async function abrir(el, _id, ctx) {
         const rolagem = el.scrollTop;
         await buscarDiretor();
         if (ctx.vivo()) { desenhar(antes); el.scrollTop = rolagem; }
-        if (!(await gravar()) && ctx.vivo()) toast('Sem internet para mandar o resultado. Ele fica guardado e sobe quando você abrir o jogo de novo.');
+        if (!(await gravar()) && ctx.vivo()) toast('Sem internet para mandar o resultado. Ele fica guardado e sobe sozinho depois.');
         return;
       }
       if (erradas.length === 2) await buscarDiretor();
