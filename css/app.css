@@ -438,3 +438,23 @@ img.av{object-fit:cover;background:var(--raised)}
 .avancado[open] summary .vai{transform:rotate(180deg)}
 .avancado>section{margin-top:18px}
 .avancado h2{font-size:16px}
+
+/* bloco 2 (20/11): "Vi de novo", foto de perfil no topo, gráficos clicáveis e a folha que sobe */
+.btn svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.btn.rever{align-self:center}
+.rev{display:inline-flex;align-items:center;gap:2px;vertical-align:-2px}
+.chip.on img{width:100%;height:100%;border-radius:50%;object-fit:cover}
+.chip.on{overflow:hidden}
+.hist button{height:100%;display:flex;align-items:flex-end;min-width:0}
+.hist button i{width:100%}
+.hist button:active i,.barra:active i{opacity:.6}
+button.barra{width:100%;text-align:left}
+.folha-v{position:fixed;inset:0;z-index:45;background:var(--veu);display:flex;align-items:flex-end;justify-content:center;animation:surgir .2s ease-out}
+.folha{width:100%;max-width:520px;max-height:72dvh;background:var(--surface);border-radius:20px 20px 0 0;display:flex;flex-direction:column;padding:8px max(16px,env(safe-area-inset-right,0px)) calc(12px + env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-left,0px));animation:subir .28s cubic-bezier(.2,.9,.25,1)}
+.pega{width:38px;height:5px;border-radius:3px;background:var(--faint);margin:0 auto 10px;flex:none}
+.folha-t{display:flex;align-items:center;justify-content:space-between;gap:12px;padding-bottom:8px;flex:none}
+.folha-t b{display:block;font-size:20px;font-weight:700;letter-spacing:-.01em}
+.folha-t span{font-size:13px;color:var(--muted)}
+.folha-c{overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;min-height:0}
+@keyframes subir{from{transform:translateY(100%)}to{transform:none}}
+@keyframes surgir{from{opacity:0}to{opacity:1}}
