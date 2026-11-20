@@ -253,6 +253,9 @@ const refazerAba = () => { // junta os avisos que chegam em sequência (login, s
   esperaRefazer = setTimeout(() => {
     // quem está digitando (busca, review) não perde o que escreveu: a tela se atualiza na próxima visita
     if (document.activeElement?.matches?.('input:not([type="range"]), textarea')) return;
+    // tela com trabalho em andamento (lista sendo montada, jogo no meio) avisa com data-sem-refazer: refazer agora
+    // jogaria fora o que a pessoa fez
+    if (onde?.tipo === 'ficha' && sheet.querySelector('[data-sem-refazer]')) return;
     if (onde?.tipo === 'aba') { abaNaTela = null; navegar(); }
     // numa ficha, só refaz se a pessoa ainda está no topo (para não tirar a tela do lugar no meio da leitura)
     else if (onde?.tipo === 'ficha' && sheet.scrollTop < 60) navegar();

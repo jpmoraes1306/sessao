@@ -117,7 +117,7 @@ export function poster(c, { lg = false, tam = 'w342' } = {}) {
 const iniciais = (n) => String(n).split(' ').filter((w) => /^[A-ZÀ-Ý]/.test(w)).map((w) => w[0]).slice(0, 2).join('');
 export function foto(p, cls = '') {
   const [a, b] = corDe(p.nome);
-  return `<span class="ph ${cls}" style="--a:${a};--b:${b}">${esc(iniciais(p.nome))}${p.foto ? `<img src="${img(p.foto, 'w185')}" alt="" loading="lazy" decoding="async" crossorigin="anonymous" ${SOME}>` : ''}</span>`;
+  return `<span class="ph ${cls}" style="--a:${a};--b:${b}">${esc(iniciais(p.nome))}${p.foto ? `<img src="${esc(img(p.foto, 'w185'))}" alt="" loading="lazy" decoding="async" crossorigin="anonymous" ${SOME}>` : ''}</span>`;
 }
 /** Elenco sem foto repetida: quem dirige (ou cria) e também atua aparece uma vez só, com os dois cargos. */
 export function elencoJunto(chefes, cargo, elenco, papelDe = (p) => p.papel) {

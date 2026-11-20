@@ -4,6 +4,7 @@
 import * as nuvem from './nuvem.js';
 
 export const suportado = () => 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
+const RECUSADO = '42501'; // o banco recusou a gravação: a linha existe e é de outra conta
 
 const chamar = async (acao) => {
   const { data, error } = await nuvem.banco().functions.invoke('avisos', { body: { acao } });
@@ -35,6 +36,12 @@ export async function estado() {
     if (eu) {
       const j = sub.toJSON();
       const { error } = await nuvem.banco().from('push_inscricoes').upsert({ endpoint: j.endpoint, chaves: j.keys, user_id: eu });
+      if (error?.code === RECUSADO) {
+        // a inscrição deste navegador está guardada na conta do outro (ele usou este aparelho e não saiu pelo botão):
+        // os avisos dele continuariam chegando aqui. Desfaz a inscrição; "Ativar" cria uma nova, desta conta.
+        await sub.unsubscribe().catch(() => {});
+        return 'desligado';
+      }
       if (error) console.warn('avisos: a inscrição deste aparelho não está na conta:', error.message);
     }
     return 'ligado';
@@ -49,9 +56,15 @@ export async function ligar() {
   try {
     const { chave } = await chamar('vapid');
     const reg = await navigator.serviceWorker.ready;
-    const sub = (await reg.pushManager.getSubscription()) || await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: bytes(chave) });
-    const j = sub.toJSON();
-    const { error } = await nuvem.banco().from('push_inscricoes').upsert({ endpoint: j.endpoint, chaves: j.keys, user_id: nuvem.usuario().id });
+    const inscrever = () => reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: bytes(chave) });
+    const guardar = (s) => { const j = s.toJSON(); return nuvem.banco().from('push_inscricoes').upsert({ endpoint: j.endpoint, chaves: j.keys, user_id: nuvem.usuario().id }); };
+    let sub = (await reg.pushManager.getSubscription()) || await inscrever();
+    let { error } = await guardar(sub);
+    if (error?.code === RECUSADO) { // a inscrição antiga deste navegador é da outra conta: faz uma nova, desta
+      await sub.unsubscribe().catch(() => {});
+      sub = await inscrever();
+      ({ error } = await guardar(sub));
+    }
     return error ? 'Não deu para guardar a inscrição.' : '';
   } catch (erro) {
     console.warn('avisos:', erro);
@@ -82,8 +95,9 @@ export async function alternarEstreia(meta, data) {
   const eu = nuvem.usuario()?.id;
   if (!b || !eu) return false;
   if (marcadas.has(meta.id)) {
+    const { error } = await b.from('avisos_estreia').delete().match({ user_id: eu, tmdb_id: meta.id });
+    if (error) return false; // sem internet: o aviso continua ligado, e a tela diz que não deu
     marcadas.delete(meta.id);
-    await b.from('avisos_estreia').delete().match({ user_id: eu, tmdb_id: meta.id });
   } else {
     marcadas.add(meta.id);
     const { error } = await b.from('avisos_estreia').upsert({ user_id: eu, tmdb_id: meta.id, titulo: meta.titulo, data });

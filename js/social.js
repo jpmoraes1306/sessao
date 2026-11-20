@@ -155,7 +155,7 @@ export async function feed(dias = 7) {
   const desde = new Date(Date.now() - dias * 864e5).toLocaleDateString('sv-SE', { timeZone: 'America/Sao_Paulo' });
   const { data, error } = await b.from('diario').select('tipo, tmdb_id, data, nota, revisto').eq('user_id', o.id).eq('tipo', 'filme').gte('data', desde)
     .order('data', { ascending: false }).order('id', { ascending: false }).limit(60);
-  if (error) return [];
+  if (error) throw error; // quem chama esconde a fileira: "não viu nada" só quando a conta respondeu isso
   const vistos = new Set();
   const linhas = data.filter((x) => !vistos.has(x.tmdb_id) && vistos.add(x.tmdb_id));
   const info = await dados.resumos(linhas);

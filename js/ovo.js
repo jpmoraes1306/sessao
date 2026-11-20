@@ -82,7 +82,24 @@ let carregando = null;
 const LOCAL = 'sessao:ovo:achado'; // rodada em que este aparelho achou (vale também sem login)
 // guarda a rodada e de quem foi, para o achado de um não valer para o outro no mesmo aparelho
 const marcaLocal = () => `${rodada()}|${nuvem.usuario()?.id || ''}`;
-const achouAqui = () => { try { return localStorage.getItem(LOCAL) === marcaLocal(); } catch { return false; } };
+const achouAqui = () => {
+  try {
+    const marca = localStorage.getItem(LOCAL);
+    if (marca === marcaLocal()) return true;
+    // achou antes de o login guardado ser conferido (a marca ficou sem dono): passa a valer para quem entrou
+    if (marca === `${rodada()}|` && nuvem.usuario()) { localStorage.setItem(LOCAL, marcaLocal()); return true; }
+    return false;
+  } catch { return false; }
+};
+const QUANDO = 'sessao:ovo:quando'; // a hora em que este aparelho achou: o envio atrasado (sem internet na hora) não perde a vez
+/** A hora guardada do achado desta rodada (ISO), ou null. Nunca no futuro. */
+function quandoAchou() {
+  try {
+    const [r, iso] = (localStorage.getItem(QUANDO) || '').split('|');
+    const t = Date.parse(iso);
+    return r === rodada() && Number.isFinite(t) ? new Date(Math.min(t, Date.now())).toISOString() : null;
+  } catch { return null; }
+}
 
 async function carregar() {
   const b = nuvem.usuario() ? nuvem.banco() : null;
@@ -137,7 +154,7 @@ function marcarAchado() {
 
 /** Registra que você achou (uma vez por rodada) e avisa o outro, se ele ainda não achou. */
 async function registrar() {
-  try { localStorage.setItem(LOCAL, marcaLocal()); } catch { /* sem armazenamento, vale só nesta visita */ }
+  try { localStorage.setItem(LOCAL, marcaLocal()); localStorage.setItem(QUANDO, `${rodada()}|${new Date().toISOString()}`); } catch { /* sem armazenamento, vale só nesta visita */ }
   await pronto();
   await enviar();
 }
@@ -147,7 +164,8 @@ async function enviar() {
   if (!b) return;
   const eu = nuvem.usuario().id;
   if (doDia().some((a) => a.user_id === eu)) return;
-  const { error } = await b.from('ovo_achados').upsert({ dia: rodada(), user_id: eu }, { onConflict: 'dia,user_id', ignoreDuplicates: true });
+  const quando = quandoAchou();
+  const { error } = await b.from('ovo_achados').upsert({ dia: rodada(), user_id: eu, ...(quando ? { achado_em: quando } : {}) }, { onConflict: 'dia,user_id', ignoreDuplicates: true });
   if (error) return;
   await carregar().catch(() => {});
   // o aviso no celular do outro sai pela função do servidor; se falhar, a corrida continua valendo

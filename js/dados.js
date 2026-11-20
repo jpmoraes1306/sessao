@@ -233,6 +233,7 @@ export function salvarReview(meta, texto, spoiler) {
   conferirDono();
   const k = chaveDe(meta.tipo, meta.id);
   const tinhaQuero = !!d.titulos[k]?.quero;
+  const tinhaReview = !!d.titulos[k]?.review;
   const limpo = (texto || '').trim();
   const agora = new Date().toISOString();
   const reg = { ...d.titulos[k], ...meta, review: limpo || null, spoiler: limpo ? !!spoiler : false, reviewEm: limpo ? agora : null, em: agora };
@@ -243,6 +244,11 @@ export function salvarReview(meta, texto, spoiler) {
     b.from('cache_titulos').upsert({ tipo: meta.tipo, tmdb_id: meta.id, resumo: resumoDe(reg) }, { onConflict: 'tipo,tmdb_id', ignoreDuplicates: true }),
     b.from('avaliacoes').upsert({ user_id: user, tipo: meta.tipo, tmdb_id: meta.id, visto: !!reg.visto, nota: reg.nota ?? null, curtido: !!reg.curtido, seguindo: !!reg.seguindo, review: reg.review, spoiler: reg.spoiler, review_em: reg.reviewEm, atualizado_em: agora }),
     ...(tinhaQuero && !reg.quero ? [b.from('quero_ver').delete().match({ user_id: user, tipo: meta.tipo, tmdb_id: meta.id, juntos: false })] : []),
+    // apagou a review: a conversa e as curtidas dela vão junto, para não reaparecerem embaixo de uma review nova
+    ...(tinhaReview && !limpo ? [
+      b.from('comentarios_review').delete().match({ autor_id: user, tipo: meta.tipo, tmdb_id: meta.id }),
+      b.from('curtidas_review').delete().match({ autor_id: user, tipo: meta.tipo, tmdb_id: meta.id }),
+    ] : []),
   ]));
   return reg;
 }
@@ -268,15 +274,17 @@ export function definirFavoritos(lista) {
   for (const f of lista) if (limpa.length < 4 && !limpa.some((x) => x.tipo === f.tipo && x.id === f.id)) limpa.push({ tipo: f.tipo, id: f.id, titulo: f.titulo, ano: f.ano ?? null, poster: f.poster || '' });
   gravarFavoritos(limpa, limpa);
 }
+let filaFavoritos = Promise.resolve(); // uma gravação por vez: dois toques seguidos na estrela não se atropelam na conta
 function gravarFavoritos(lista, metas) {
   d.favoritos = lista;
   salvar();
-  naConta(['favoritos', 'favs'], async (b, user) => {
+  naConta(['favoritos', 'favs'], (b, user) => (filaFavoritos = filaFavoritos.catch(() => {}).then(async () => {
     for (const m of metas) await garantirResumo(m); // o outro precisa do título e do pôster para ver no seu perfil
+    const agora = favoritos(); // vale o estado mais novo, que pode ter mudado enquanto esta gravação esperava a vez
     const apagou = await b.from('favoritos').delete().eq('user_id', user);
-    if (apagou.error || !lista.length) return apagou;
-    return b.from('favoritos').insert(lista.map((f, i) => ({ user_id: user, posicao: i + 1, tipo: f.tipo, tmdb_id: f.id })));
-  });
+    if (apagou.error || !agora.length) return apagou;
+    return b.from('favoritos').insert(agora.map((f, i) => ({ user_id: user, posicao: i + 1, tipo: f.tipo, tmdb_id: f.id })));
+  })));
 }
 
 /* ---------- episódios ---------- */

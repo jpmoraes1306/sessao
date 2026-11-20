@@ -40,8 +40,14 @@ export function usuario() {
   };
 }
 
-async function aoEntrar() {
-  if (!sessao || !cliente) { perfil = null; perfis = []; definirStreamings(null); return; } // saiu: os streamings de quem estava logado não ficam para o próximo
+async function aoEntrar(saiu = false) {
+  if (!sessao || !cliente) {
+    perfil = null; perfis = [];
+    // saiu de verdade: os streamings de quem estava logado não ficam para o próximo. Só "sem sessão ao abrir"
+    // (sem internet para renovar o login) não mexe em nada: fica o que estava guardado no aparelho.
+    if (saiu) definirStreamings(null);
+    return;
+  }
   const [{ data: segredos, error: erroSegredos }, { data: todos }] = await Promise.all([
     cliente.from('segredos').select('nome, valor'),
     cliente.from('perfis').select('*').order('criado_em'),
@@ -81,7 +87,7 @@ export async function iniciar() {
       sessao = nova;
       if (!mudou && evento !== 'USER_UPDATED') return;
       // fora do retorno de chamada do Supabase, para não travar a troca de token
-      setTimeout(async () => { await aoEntrar(); avisar(); }, 0);
+      setTimeout(async () => { await aoEntrar(evento === 'SIGNED_OUT'); avisar(); }, 0);
     });
   } catch (erro) {
     console.warn('Sem ligação com o Supabase:', erro?.message || erro);

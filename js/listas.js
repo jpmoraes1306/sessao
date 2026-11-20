@@ -21,10 +21,10 @@ export async function ler(id) {
 }
 
 /**
- * Grava uma lista sua (nova quando não há `id`). Devolve '' se deu certo, ou o texto do problema.
+ * Grava uma lista sua (nova quando não há `id`; aí `aoCriar` recebe o número dela). Devolve '' se deu certo, ou o texto do problema.
  * A lista editada no app passa a ser "do app": importar o Letterboxd de novo não troca mais ela.
  */
-export async function salvar({ id, nome, ranqueada, itens }) {
+export async function salvar({ id, nome, ranqueada, itens, aoCriar }) {
   const b = nuvem.banco();
   const eu = nuvem.usuario()?.id;
   if (!b || !eu) return 'Entre na sua conta para guardar a lista.';
@@ -37,6 +37,8 @@ export async function salvar({ id, nome, ranqueada, itens }) {
   const { data, error } = await pedido;
   if (error) return error.code === '23505' ? 'Você já tem uma lista com esse nome.' : 'Não deu para salvar. Confira a internet.';
   if (!data) return 'Esta lista não existe mais.';
+  // lista nova: quem chamou guarda o número, para um "salvar de novo" (se os títulos falharem) não tentar criar outra
+  if (!id) aoCriar?.(data.id);
   // grava por cima, posição por posição, e só depois corta o que sobrou: se a internet cair no meio,
   // a lista antiga continua lá em vez de ficar vazia
   if (itens.length) {
