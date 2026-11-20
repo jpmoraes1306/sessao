@@ -30,13 +30,18 @@ export async function abrir(el, id, ctx) {
 
   /* ----- o que já foi ao ar ----- */
   // Com a temporada carregada, vale a data de cada episódio; sem ela, vale o "último episódio exibido" da série.
+  // Pelo "último exibido": vale quando ele é de uma temporada numerada (às vezes o TMDB aponta um especial).
+  const peloUltimo = (t, n) => ultimaT > 0 && (t < ultimaT || (t === ultimaT && n <= s.ultimo.e));
+  /** Episódio sem data no TMDB (séries antigas): conta como exibido se vem antes do último exibido da série. */
+  const jaFoi = (t, e) => (e.data ? e.data <= hoje() : peloUltimo(t, e.n));
   function noAr(t) {
     const c = carregadas.get(t);
-    if (c) return c.episodios.filter((e) => e.data && e.data <= hoje()).map((e) => e.n);
+    if (c) return c.episodios.filter((e) => jaFoi(t, e)).map((e) => e.n);
     const info = s.temporadas.find((x) => x.n === t);
-    if (!info || !s.ultimo) return [];
-    if (t === 0) return Array.from({ length: info.episodios }, (_, i) => i + 1);
-    const n = t < ultimaT ? info.episodios : t === ultimaT ? s.ultimo.e : 0;
+    if (!info) return [];
+    let n;
+    if (ultimaT > 0) n = t < ultimaT ? info.episodios : t === ultimaT ? s.ultimo.e : 0;
+    else n = info.data && info.data <= hoje() ? info.episodios : 0; // sem "último exibido" útil: vale a data de estreia da temporada
     return Array.from({ length: n }, (_, i) => i + 1);
   }
   const todosNoAr = () => numeradas.flatMap((t) => noAr(t.n).map((e) => ({ t: t.n, e })));
@@ -163,7 +168,7 @@ export async function abrir(el, id, ctx) {
   function episodio(t, e) {
     const k = `${t}x${e.n}`;
     const reg = vistos()[k];
-    const futuro = !e.data || e.data > hoje();
+    const futuro = !jaFoi(t, e);
     const aberto = epAberto === k;
     return `<div class="ep${futuro ? ' futuro' : ''}" data-k="${k}">
       <button class="still" data-acao="episodio" data-k="${k}" aria-label="Detalhes de ${esc(e.nome)}">${e.still ? `<img src="${img(e.still, 'w300')}" alt="" loading="lazy" crossorigin="anonymous" onerror="this.remove()">` : ''}${e.nota && e.votos ? `<span class="nt">${nota(e.nota)}</span>` : ''}</button>
@@ -198,9 +203,9 @@ export async function abrir(el, id, ctx) {
   const anos = s.ano ? (s.acabou ? (s.anoFim && s.anoFim !== s.ano ? `${s.ano}–${s.anoFim}` : `${s.ano}`) : `${s.ano}–`) : '';
   const nTemps = numeradas.filter((t) => t.episodios).length;
   const linhaSub = [
-    [anos, s.status].filter(Boolean).join(' · '),
-    [nTemps ? `${nTemps} temporada${nTemps > 1 ? 's' : ''}` : '', s.duracao ? `${s.duracao} min` : '', classificacao(s.classificacao)].filter(Boolean).join(' · '),
-    [s.emissoras.slice(0, 2).join(', '), ...s.generos.slice(0, 2)].filter(Boolean).join(' · '),
+    esc([anos, s.status].filter(Boolean).join(' · ')),
+    esc([nTemps ? `${nTemps} temporada${nTemps > 1 ? 's' : ''}` : '', s.duracao ? `${s.duracao} min` : '', classificacao(s.classificacao)].filter(Boolean).join(' · ')),
+    esc([s.emissoras.slice(0, 2).join(', '), ...s.generos.slice(0, 2)].filter(Boolean).join(' · ')),
     s.criadores.length ? `Criação ${s.criadores.slice(0, 2).map((c) => `<a href="#/pessoa/${c.id}">${esc(c.nome)}</a>`).join(', ')}` : '',
   ].filter(Boolean).join('<br>');
 
@@ -258,7 +263,9 @@ export async function abrir(el, id, ctx) {
     if (!t) return;
     const acao = t.dataset.acao;
     const m = meu();
-    if (await tocarExtra(acao, meta, t)) { redesenhar(); return; }
+    const foiExtra = await tocarExtra(acao, meta, t);
+    if (!ctx.vivo()) return; // a pessoa abriu outra ficha enquanto gravava: não desenha esta por cima
+    if (foiExtra) { redesenhar(); return; }
 
     if (t.dataset.r === 'tirar') { await darNota(null, t.closest('.rate').dataset); return; }
     if (acao === 'rever-ep' || acao === 'rever-ep-menos') {

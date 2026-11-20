@@ -25,6 +25,7 @@ const aviso = (titulo, texto) => `<div class="backdrop curto" style="--a:#5c4a2a
 /** Sorteia o quadro de hoje entre os filmes que os dois viram e grava na conta. Devolve a linha gravada (a de quem chegou primeiro). */
 async function sortear(b, dia) {
   if (!social.pronto()) await social.carregar();
+  if (!social.pronto()) throw new Error('sem os dados do outro');
   const comuns = dados.todos().filter((t) => t.tipo === 'filme' && t.visto && social.doOutro('filme', t.id)?.visto);
   if (comuns.length < MINIMO) return { poucos: comuns.length };
   const info = await dados.resumos(comuns.map((t) => ({ tipo: 'filme', tmdb_id: t.id })));
@@ -87,7 +88,25 @@ export async function abrir(el, _id, ctx) {
   const certo = F.opcoes.find((x) => x.id === F.tmdb_id);
   let minha = jogadas.find((j) => j.user_id === u.id) || null;
   let erradas = [];
-  try { const g = JSON.parse(localStorage.getItem(LOCAL) || 'null'); if (g?.dia === dia && g.de === u.id) erradas = g.erradas.filter((id) => F.opcoes.some((x) => x.id === id && id !== F.tmdb_id)).slice(0, 2); } catch { /* começa do zero */ }
+  // o aparelho guarda as tentativas de hoje e o resultado; se a gravação na conta falhar, o resultado vale
+  // mesmo assim (não dá para jogar de novo) e sobe na próxima vez que a tela abrir
+  const guardar = (fim) => { try { localStorage.setItem(LOCAL, JSON.stringify({ dia, de: u.id, erradas, ...(fim ? { fim } : {}) })); } catch { /* vale só nesta visita */ } };
+  const gravar = async () => {
+    const { error } = await b.from('frame_jogadas').upsert(minha, { onConflict: 'dia,user_id', ignoreDuplicates: true });
+    return !error;
+  };
+  try {
+    const g = JSON.parse(localStorage.getItem(LOCAL) || 'null');
+    if (g?.dia === dia && g.de === u.id) {
+      erradas = [...new Set(g.erradas || [])].filter((id) => F.opcoes.some((x) => x.id === id && id !== F.tmdb_id)).slice(0, 3);
+      const fim = g.fim || (erradas.length >= 3 ? { tentativas: 3, acertou: false } : null);
+      if (!minha && fim) {
+        minha = { dia, user_id: u.id, tentativas: Math.min(3, Math.max(1, Number(fim.tentativas) || 3)), acertou: Boolean(fim.acertou) };
+        jogadas.push(minha); mes.push(minha);
+        gravar();
+      }
+    }
+  } catch { /* começa do zero */ }
   let diretor = '';
   const buscarDiretor = () => dados.resumos([{ tipo: 'filme', tmdb_id: F.tmdb_id }]).then((m) => { diretor = m.get(`filme:${F.tmdb_id}`)?.diretores?.[0]?.nome || ''; }).catch(() => {});
   if (erradas.length === 2 || minha) await buscarDiretor();
@@ -98,8 +117,8 @@ export async function abrir(el, _id, ctx) {
   function desenhar(antes) {
     const fim = Boolean(minha);
     const n = erradas.length;
-    const dica = fim ? `<a href="#/filme/${certo.id}">${esc(certo.titulo)}</a>${certo.ano ? ` (${certo.ano})` : ''}${diretor ? `, de ${esc(diretor)}` : ''}.`
-      : n === 0 ? '' : `Dica: é de ${certo.ano || 'ano desconhecido'}${n === 2 && diretor ? `, direção de ${esc(diretor)}` : ''}.`;
+    const dica = fim ? `<a href="#/filme/${Number(certo.id)}">${esc(certo.titulo)}</a>${certo.ano ? ` (${Number(certo.ano)})` : ''}${diretor ? `, de ${esc(diretor)}` : ''}.`
+      : n === 0 ? '' : `Dica: é de ${Number(certo.ano) || 'ano desconhecido'}${n === 2 && diretor ? `, direção de ${esc(diretor)}` : ''}.`;
     const dele = jogadas.find((j) => j.user_id === o.id);
     const pontos = (id) => mes.filter((j) => j.user_id === id && j.acertou).length;
     const [eu, ele] = [pontos(u.id), pontos(o.id)];
@@ -107,10 +126,10 @@ export async function abrir(el, _id, ctx) {
     el.innerHTML = `<div class="backdrop curto" style="--a:#5c4a2a;--b:#101419"></div><button class="back" data-acao="voltar" aria-label="Voltar">‹</button>
     <div class="wrap" style="gap:16px"><div class="pessoa-topo" style="margin-top:-40px"><div><div class="eyebrow">Easter egg</div><h1>Frame do dia</h1></div></div>
       <p class="sub2" style="display:block">De que filme é este quadro? É um dos que você e ${esc(o.nome)} já viram. São 3 chances, e a cada erro a imagem abre mais.</p>
-      <div class="frame"><img src="${img(F.imagem, 'w1280')}" alt="Quadro de um filme para adivinhar" crossorigin="anonymous" draggable="false" style="transform:scale(${fim ? 1 : ZOOM[n]});transform-origin:${esc(F.foco)}">
+      <div class="frame"><img src="${esc(img(F.imagem, 'w1280'))}" alt="Quadro de um filme para adivinhar" crossorigin="anonymous" draggable="false" style="transform:scale(${fim ? 1 : ZOOM[n]});transform-origin:${esc(F.foco)}">
         <span class="conta">${fim ? (minha.acertou ? `Acertou na ${minha.tentativas}ª` : 'Não foi dessa vez') : `Tentativa ${n + 1} de 3`}</span></div>
       <p class="dica" aria-live="polite">${dica}</p>
-      <div class="grupo">${F.opcoes.map((x) => `<button class="lin op${fim && x.id === certo.id ? ' certa' : ''}" data-op="${x.id}" ${fim || erradas.includes(x.id) ? 'disabled' : ''}><span class="n">${esc(x.titulo)}</span></button>`).join('')}</div>
+      <div class="grupo">${F.opcoes.map((x) => `<button class="lin op${fim && x.id === certo.id ? ' certa' : ''}" data-op="${Number(x.id)}" ${fim || erradas.includes(x.id) ? 'disabled' : ''}><span class="n">${esc(x.titulo)}</span></button>`).join('')}</div>
       ${fim ? `<section><h2>Placar <small>acertos em ${nomeMes}</small></h2>
         <div class="placar"><div class="${eu > ele ? 'lider' : ''}"><b>${eu}</b>você</div><span>${nomeMes}</span><div class="${ele > eu ? 'lider' : ''}"><b>${ele}</b>${esc(o.nome)}</div></div>
         <div class="grupo"><div class="lin"><span class="n">Hoje<small>${resultado(minha, 'Você')} · ${esc(resultado(dele, o.nome))}</small></span></div></div></section>
@@ -127,33 +146,33 @@ export async function abrir(el, _id, ctx) {
     }
   }
 
+  let ocupado = false; // um toque por vez: dois toques seguidos na mesma opção não gastam duas tentativas
   el.onclick = async (e) => {
     const bt = e.target.closest('button[data-op]');
-    if (!bt || minha) return;
+    if (!bt || minha || ocupado) return;
     const id = Number(bt.dataset.op);
-    const acertou = id === F.tmdb_id;
-    const antes = ZOOM[erradas.length];
-    if (!acertou) {
-      erradas.push(id);
-      try { localStorage.setItem(LOCAL, JSON.stringify({ dia, de: u.id, erradas })); } catch { /* vale só nesta visita */ }
-    }
-    if (acertou || erradas.length >= 3) {
-      minha = { dia, user_id: u.id, tentativas: acertou ? erradas.length + 1 : 3, acertou };
-      jogadas.push(minha); mes.push(minha);
-      const rolagem = el.scrollTop;
-      await buscarDiretor();
+    if (erradas.includes(id)) return;
+    ocupado = true;
+    try {
+      const acertou = id === F.tmdb_id;
+      const antes = ZOOM[erradas.length];
+      if (!acertou) { erradas.push(id); guardar(); }
+      if (acertou || erradas.length >= 3) {
+        minha = { dia, user_id: u.id, tentativas: acertou ? erradas.length + 1 : 3, acertou };
+        guardar({ tentativas: minha.tentativas, acertou });
+        jogadas.push(minha); mes.push(minha);
+        const rolagem = el.scrollTop;
+        await buscarDiretor();
+        if (ctx.vivo()) { desenhar(antes); el.scrollTop = rolagem; }
+        if (!(await gravar()) && ctx.vivo()) toast('Sem internet para mandar o resultado. Ele fica guardado e sobe quando você abrir o jogo de novo.');
+        return;
+      }
+      if (erradas.length === 2) await buscarDiretor();
       if (!ctx.vivo()) return;
+      const rolagem = el.scrollTop;
       desenhar(antes);
       el.scrollTop = rolagem;
-      const { error } = await b.from('frame_jogadas').upsert(minha, { onConflict: 'dia,user_id', ignoreDuplicates: true });
-      if (error) toast('Não deu para gravar o resultado. Confira a internet.');
-      return;
-    }
-    if (erradas.length === 2) await buscarDiretor();
-    if (!ctx.vivo()) return;
-    const rolagem = el.scrollTop;
-    desenhar(antes);
-    el.scrollTop = rolagem;
+    } finally { ocupado = false; }
   };
 
   desenhar();

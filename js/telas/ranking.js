@@ -52,6 +52,8 @@ export async function abrir(el, rota, ctx) {
       ${existente ? '<button class="texto" data-rk="apagar" style="align-self:flex-start;color:var(--rt)">Apagar este ranking</button>' : ''}
     </div>`;
   }
+  // volta para a página da pessoa; se o editor foi aberto direto (sem tela do app atrás), vai para ela
+  const sair = () => { if ((history.state?.sessaoI ?? 0) > 0) history.back(); else location.hash = `#/pessoa/${p.id}`; };
   const redesenhar = () => { const r = el.scrollTop; desenhar(); el.scrollTop = r; };
 
   // arrastar: os outros itens abrem espaço com transform; a ordem só muda de verdade ao soltar
@@ -103,19 +105,21 @@ export async function abrir(el, rota, ctx) {
     else if (b.dataset.rk === 'pela-nota') { ordem = pelaNota(ordem); mudou = true; redesenhar(); }
     else if (b.dataset.rk === 'salvar') {
       if (ordem.length < 2) { toast('Ponha pelo menos 2 títulos no ranking'); return; }
-      if (!mudou) { history.back(); return; }
+      if (!mudou) { sair(); return; }
       salvando = true;
       const ok = await rankings.salvar(p, ordem, existente);
       salvando = false;
+      if (!ctx.vivo()) return; // a pessoa saiu da tela enquanto salvava
       if (!ok) { toast('Não deu para salvar. Confira a internet.'); return; }
       const o = nuvem.outro();
       toast(o ? `Ranking salvo. ${o.nome} também vê.` : 'Ranking salvo');
-      history.back();
+      sair();
     } else if (b.dataset.rk === 'apagar') {
       if (!(await perguntar({ titulo: 'Apagar este ranking?', texto: `O seu ranking de ${p.nome} some para vocês dois. As suas notas continuam.`, sim: 'Apagar', nao: 'Manter' }))) return;
       if (!(await rankings.apagar(existente))) { toast('Não deu para apagar'); return; }
+      if (!ctx.vivo()) return;
       toast('Ranking apagado');
-      history.back();
+      sair();
     }
   };
 

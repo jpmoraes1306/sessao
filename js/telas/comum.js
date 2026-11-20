@@ -82,7 +82,11 @@ export async function montarReviews(el, ctx, meta, aoSalvar = () => {}) {
   let editando = false;
   let spoilerAberto = false;
 
-  const desenhar = () => {
+  // manterRascunho: o que a pessoa está digitando continua na caixa quando a seção é refeita (chegaram as
+  // reviews, ela curtiu a do outro...). Só não vale ao salvar, cancelar ou abrir para editar.
+  const desenhar = (manterRascunho = true) => {
+    const rascunho = manterRascunho ? $('#minha-review', sec)?.value : null;
+    const spoilerMarcado = manterRascunho ? $('#tem-spoiler', sec)?.checked : null;
     const minha = dados.titulo(meta.tipo, meta.id);
     const dele = lista.find((r) => !r.eu);
     const minhaLinha = lista.find((r) => r.eu);
@@ -97,6 +101,7 @@ export async function montarReviews(el, ctx, meta, aoSalvar = () => {}) {
           <div class="actions" style="justify-content:space-between;align-items:center"><label class="check"><input type="checkbox" id="tem-spoiler" ${minha.spoiler ? 'checked' : ''}> Contém spoiler</label>
           <span class="actions">${meuTexto ? '<button class="btn small" data-acao="cancelar-review">Cancelar</button>' : ''}<button class="btn small on-seen" data-acao="salvar-review">Salvar review</button></span></div>`;
     sec.innerHTML = `<h2>Reviews de vocês</h2><div class="facts">${cartaoDele}${meuCartao}</div>`;
+    if (rascunho != null && $('#minha-review', sec)) { $('#minha-review', sec).value = rascunho; $('#tem-spoiler', sec).checked = Boolean(spoilerMarcado); }
   };
 
   sec.onclick = async (e) => {
@@ -120,7 +125,7 @@ export async function montarReviews(el, ctx, meta, aoSalvar = () => {}) {
       social.curtirReview(meta.tipo, meta.id, r.user_id, r.curtidaPorMim);
     } else return;
     e.stopPropagation();
-    desenhar();
+    desenhar(!['salvar-review', 'cancelar-review', 'editar-review'].includes(acao));
   };
 
   desenhar();

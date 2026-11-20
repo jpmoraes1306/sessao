@@ -23,17 +23,24 @@ const avatar = (p, cls = 'lg') => {
   return `<span class="ph ${cls}" style="--a:${a};--b:${b}">${esc((p?.nome || 'V')[0])}${p?.foto ? `<img src="${esc(p.foto)}" alt="" referrerpolicy="no-referrer" onerror="this.remove()">` : ''}</span>`;
 };
 
+/** Filme conta quando está marcado como visto. Série não tem "visto": conta a que a pessoa acompanha ou já deu nota.
+    A regra é a mesma para o seu perfil e para o do outro. */
+const contaComoVisto = (t) => Boolean(t.visto || (t.tipo === 'serie' && (t.seguindo || t.nota != null)));
+/** O Perfil ainda é a aba na tela? (depois de esperar a internet, a pessoa pode ter ido para outra) */
+const naTela = (el) => el.dataset.aba === 'perfil';
+
 /** Junta o que é preciso para desenhar o perfil de uma pessoa. */
 async function carregar(pid, ehMeu) {
   const b = nuvem.banco();
-  const vistos = (ehMeu ? dados.todos() : social.todosDoOutro()).filter((t) => t.visto);
+  const vistos = (ehMeu ? dados.todos() : social.todosDoOutro()).filter(contaComoVisto);
   const [info, diario, favs, listas] = await Promise.all([
     dados.resumos(vistos.map((t) => ({ tipo: t.tipo, tmdb_id: t.id }))),
     b.from('diario').select('tipo, tmdb_id, data, nota, revisto').eq('user_id', pid).order('data', { ascending: false }).order('id', { ascending: false }).limit(1000).then((r) => r.data || []),
     ehMeu ? dados.favoritos() : b.from('favoritos').select('posicao, tipo, tmdb_id').eq('user_id', pid).order('posicao').then((r) => r.data || []),
     b.from('listas').select('id, nome, ranqueada, lista_itens(count)').eq('user_id', pid).order('nome').then((r) => r.data || []),
   ]);
-  const extra = await dados.resumos([...diario.slice(0, 12), ...(ehMeu ? [] : favs)]);
+  // o diário pode ter títulos que não estão entre os vistos (algo desmarcado depois): busca o resumo deles também
+  const extra = await dados.resumos([...diario.filter((x) => !info.has(K(x.tipo, x.tmdb_id))), ...(ehMeu ? [] : favs)]);
   const res = (tipo, id) => info.get(K(tipo, id)) || extra.get(K(tipo, id)) || {};
   return { vistos, info, diario, listas, res, favoritos: ehMeu ? favs : favs.map((f) => ({ tipo: f.tipo, id: f.tmdb_id, ...res(f.tipo, f.tmdb_id) })) };
 }
@@ -168,7 +175,11 @@ function cartaoOvo() {
     <p class="note">Muda todo dia à meia-noite. Achar o símbolo mostra o Dafoe e o Cage do dia e libera o frame do dia.</p>`;
 }
 
-function ajustes() {  const u = nuvem.usuario();
+// achou o símbolo com o Perfil aberto por baixo: o cartão passa a dizer "você já achou" na hora
+window.addEventListener('ovo:achado', () => { const c = document.querySelector('#view[data-aba="perfil"] #cartao-ovo'); if (c) c.innerHTML = cartaoOvo(); });
+
+function ajustes() {
+  const u = nuvem.usuario();
   const streamings = [...new Set(MEUS_STREAMINGS.values())];
   return `
   <section><h2>Conta</h2>
@@ -228,21 +239,22 @@ export async function render(el) {
     <div class="pstats">${numeros}</div>
     ${u ? '' : '<p class="note">Sem login, estes números são só deste aparelho.</p>'}
   </section>`;
-  const numerosLocais = `<div><b>${local.filter((x) => x.tipo === 'filme' && x.visto).length}</b><span>Filmes</span></div><div><b>${local.filter((x) => x.tipo === 'serie' && (x.seguindo || x.visto)).length}</b><span>Séries</span></div><div><b>${dados.totalEpisodios()}</b><span>Episódios</span></div><div><b>${local.filter((x) => x.quero).length}</b><span>Quero ver</span></div>`;
+  const numerosLocais = `<div><b>${local.filter((x) => x.tipo === 'filme' && x.visto).length}</b><span>Filmes</span></div><div><b>${local.filter((x) => x.tipo === 'serie' && contaComoVisto(x)).length}</b><span>Séries</span></div><div><b>${dados.totalEpisodios()}</b><span>Episódios</span></div><div><b>${local.filter((x) => x.quero).length}</b><span>Quero ver</span></div>`;
 
   // primeiro o que já está no aparelho; as estatísticas chegam em seguida
   el.innerHTML = `${topo(ehMeu ? numerosLocais : '')}${u ? '<div id="corpo-perfil" style="display:flex;flex-direction:column;gap:28px"><div class="skel tit"></div><div class="skel txt"></div><div class="skel txt" style="width:70%"></div></div>' : ''}${ehMeu ? ajustes() : ''}`;
   ligar(el);
   // o placar da caça ao símbolo chega da conta um instante depois
-  if (ehMeu) ovo.pronto().then(() => { const c = $('#cartao-ovo', el); if (c && minhaVez === vez) c.innerHTML = cartaoOvo(); });
+  // (busca de novo a cada visita: o outro pode ter achado o símbolo depois que o app abriu)
+  if (ehMeu) (u ? ovo.atualizar() : ovo.pronto()).then(() => { const c = $('#cartao-ovo', el); if (c && minhaVez === vez && naTela(el)) c.innerHTML = cartaoOvo(); });
 
   if (!u) return;
   let d;
   try { d = await carregar(ehMeu ? u.id : o.id, ehMeu); } catch (erro) {
-    if (minhaVez === vez && $('#corpo-perfil', el)) $('#corpo-perfil', el).innerHTML = '<p class="note">Não deu para carregar as estatísticas. Confira a internet.</p>';
+    if (minhaVez === vez && naTela(el) && $('#corpo-perfil', el)) $('#corpo-perfil', el).innerHTML = '<p class="note">Não deu para carregar as estatísticas. Confira a internet.</p>';
     return;
   }
-  if (minhaVez !== vez) return;
+  if (minhaVez !== vez || !naTela(el) || !$('#corpo-perfil', el)) return;
   const e = estatisticas(d);
   grafico = { d, e };
   if (!ehMeu) {
@@ -319,7 +331,7 @@ function ligar(el) {
       salvarChaves(nova);
       if (nuvem.usuario()) await nuvem.banco().from('segredos').upsert([{ nome: 'tmdb', valor: nova.tmdb }, ...(nova.omdb ? [{ nome: 'omdb', valor: nova.omdb }] : [])]);
       toast('Chaves salvas');
-      render(el);
+      if (naTela(el)) render(el);
     };
   }
 
@@ -330,7 +342,7 @@ function ligar(el) {
     if (st) {
       const ok = await nuvem.alternarStreaming(st.dataset.streaming);
       if (!ok) toast('Não deu para gravar');
-      render(el);
+      if (naTela(el)) render(el);
       return;
     }
     const ver = e.target.closest('button[data-ver]');
@@ -344,6 +356,8 @@ function ligar(el) {
     } else if (acao === 'foto-google') {
       toast((await nuvem.salvarFoto(null)) ? 'Voltou para a foto do Google' : 'Não deu para gravar');
     } else if (acao === 'sair') {
+      // os avisos são de quem está logado: ao sair, este aparelho deixa de recebê-los (e não fica preso à conta anterior)
+      await avisos.desligar().catch(() => {});
       await nuvem.sair();
       toast('Você saiu');
     } else if (acao === 'avisos-ligar') {

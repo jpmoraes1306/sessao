@@ -155,6 +155,7 @@ function atalhos(el) {
 
 /* ---------- página ---------- */
 let altaTipo = 'filme';
+let vezDoDia = 0;
 
 export function render(el) {
   if (!temChaves()) {
@@ -175,13 +176,15 @@ export function render(el) {
   atualizar(el);
 
   const erroTexto = (erro) => `<p class="note">${erro?.status === 401 ? 'A chave do TMDB foi recusada. Confira no Perfil.' : 'Não deu para carregar. Confira a internet.'}</p>`;
-  const por = (sel, promessa, desenha) => promessa.then((lista) => {
+  // vale(): a resposta ainda é a que a tela espera? (quem troca Filmes/Séries rápido recebe as respostas fora de ordem)
+  const por = (sel, promessa, desenha, vale = () => true) => promessa.then((lista) => {
     const alvo = $(sel, el);
-    if (alvo) alvo.innerHTML = lista.length ? desenha(lista) : '<p class="note">Nada por enquanto.</p>';
+    if (alvo && vale()) alvo.innerHTML = lista.length ? desenha(lista) : '<p class="note">Nada por enquanto.</p>';
   }).catch((erro) => {
     const alvo = $(sel, el);
-    if (alvo) alvo.innerHTML = erroTexto(erro);
+    if (alvo && vale()) alvo.innerHTML = erroTexto(erro);
   });
+  const carregarAlta = () => { const tipo = altaTipo; return por('#alta', tmdb.emAlta(tipo), fileira, () => tipo === altaTipo); };
   const fileira = (lista) => `<div class="row">${lista.slice(0, 18).map((c) => tile(c)).join('')}</div>`;
 
   // toques: cartões de série, atalhos e o seletor do "Em alta"
@@ -194,7 +197,7 @@ export function render(el) {
       altaTipo = b.dataset.alta;
       el.querySelectorAll('[data-alta]').forEach((x) => x.setAttribute('aria-pressed', x.dataset.alta === altaTipo));
       $('#alta', el).innerHTML = esqueleto();
-      por('#alta', tmdb.emAlta(altaTipo), fileira);
+      carregarAlta();
     } else if (b.dataset.acao === 'ver-ep') {
       e.preventDefault();
       b.disabled = true;
@@ -204,12 +207,13 @@ export function render(el) {
     }
   };
 
-  filmeDoDia().then((d) => { partes.dia = d ? slideDoDia(d) : ''; desenharDestaque(el); })
+  const pedidoDoDia = ++vezDoDia; // se a tela for refeita antes de a resposta chegar, vale só a do pedido mais novo
+  filmeDoDia().then((d) => { if (pedidoDoDia !== vezDoDia) return; partes.dia = d ? slideDoDia(d) : ''; desenharDestaque(el); })
     .catch((erro) => { const alvo = $('#destaque', el); if (alvo && !partes.serie) alvo.innerHTML = erroTexto(erro); });
 
   por('#estreias', tmdb.estreias(), (lista) => `<div class="row">${lista.slice(0, 12).map((c) => `
     <a class="tile" href="${link(c)}" aria-label="${esc(c.titulo)}, estreia ${dataCurta(c.data)}">${poster(c).replace(/<\/div>$/, `<span class="dia">${dataCurta(c.data)}</span></div>`)}
       <span class="leg"><span class="n">juntos <span class="junto">${dataCurta(proximaTerca(c.data))}</span>${avisos.pediuAviso(c.id) ? ' · aviso' : ''}</span></span></a>`).join('')}</div>`);
   por('#cartaz', tmdb.emCartaz(), fileira);
-  por('#alta', tmdb.emAlta(altaTipo), fileira);
+  carregarAlta();
 }

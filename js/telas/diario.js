@@ -19,7 +19,7 @@ function desenhar(el, entradas, { temMais = false, vazio = '' } = {}) {
     const [a, m] = k.split('-');
     return `<section><h2>${MESL[m - 1]} ${a} <small>${grupos[k].length} título${grupos[k].length > 1 ? 's' : ''}</small></h2><div class="list">${grupos[k].map((t) => `
       <a class="li" href="#/${t.tipo}/${t.id}" style="grid-template-columns:34px 42px 1fr auto"><div class="date">${Number(t.data.slice(8))}<small>${DIAS[new Date(`${t.data.slice(0, 10)}T12:00:00`).getDay()]}</small></div>${poster(t, { tam: 'w154' })}
-        <div><div class="t">${esc(t.titulo)}</div><div class="s">${[t.ano, t.tipo === 'serie' ? 'série' : ''].filter(Boolean).join(' · ')}</div></div>
+        <div><div class="t">${esc(t.titulo)}</div><div class="s">${esc([t.ano, t.tipo === 'serie' ? 'série' : ''].filter(Boolean).join(' · '))}</div></div>
         <span class="r fim">${t.revisto ? `<span class="rev" title="Visto de novo" aria-label="visto de novo">${IC.rever}</span>` : ''}${t.curtido ? '<span class="heart">♥</span>' : ''}${selo(t.nota)}</span></a>`).join('')}</div></section>`;
   }).join('') || vazio}
   ${temMais ? '<button class="btn" data-acao="mais" style="align-self:center">Mostrar mais antigos</button>' : ''}${simboloEscondido('diario')}`;
@@ -37,16 +37,23 @@ export function render(el) {
   }
   el.innerHTML = '<div class="skel tit"></div><div class="skel txt"></div><div class="skel txt" style="width:70%"></div>';
   const entradas = [];
+  const fora = () => minhaVez !== vez || el.dataset.aba !== 'diario'; // a pessoa já foi para outra aba
+  let carregando = false;
   const carregar = async () => {
+    if (carregando) return; // dois toques em "Mostrar mais antigos" não trazem a mesma página duas vezes
+    carregando = true;
+    try { await pagina(); } finally { carregando = false; }
+  };
+  const pagina = async () => {
     const { data, error } = await b.from('diario').select('tipo, tmdb_id, data, nota, revisto').eq('user_id', nuvem.usuario().id)
       .order('data', { ascending: false }).order('id', { ascending: false }).range(entradas.length, entradas.length + POR_VEZ);
-    if (minhaVez !== vez) return;
+    if (fora()) return;
     if (error) { el.innerHTML = '<p class="note">Não deu para carregar o diário. Confira a internet.</p>'; return; }
     const temMais = data.length > POR_VEZ;
-    const pagina = data.slice(0, POR_VEZ);
-    const info = await dados.resumos(pagina);
-    if (minhaVez !== vez) return;
-    for (const r of pagina) {
+    const linhas = data.slice(0, POR_VEZ);
+    const info = await dados.resumos(linhas);
+    if (fora()) return;
+    for (const r of linhas) {
       const res = info.get(`${r.tipo}:${r.tmdb_id}`) || {};
       const meu = dados.titulo(r.tipo, r.tmdb_id);
       entradas.push({ tipo: r.tipo, id: r.tmdb_id, titulo: res.titulo || meu.titulo || 'Sem título', ano: res.ano, poster: res.poster || '', data: r.data, nota: r.nota == null ? null : Number(r.nota), revisto: r.revisto, curtido: meu.curtido });

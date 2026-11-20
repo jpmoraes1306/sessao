@@ -117,7 +117,7 @@ export async function abrir(el, id, ctx) {
 
   const linhaSub = [
     [f.ano || (aindaNaoSaiu ? 'Em breve' : ''), f.diretores.length ? `Direção ${f.diretores.slice(0, 2).map((d) => `<a href="#/pessoa/${d.id}">${esc(d.nome)}</a>`).join(', ')}` : ''].filter(Boolean).join(' · '),
-    [f.duracao ? duracao(f.duracao) : '', classificacao(f.classificacao), ...f.generos.slice(0, 3)].filter(Boolean).join(' · '),
+    esc([f.duracao ? duracao(f.duracao) : '', classificacao(f.classificacao), ...f.generos.slice(0, 3)].filter(Boolean).join(' · ')),
   ].filter(Boolean).join('<br>');
 
   el.innerHTML = `
@@ -171,7 +171,9 @@ export async function abrir(el, id, ctx) {
       toast(!ok ? 'Não deu para gravar' : avisos.pediuAviso(f.id) ? 'Você será avisado no dia da estreia' : 'Aviso desligado');
       return;
     }
-    if (await tocarExtra(t.dataset.acao, meta, t)) { atualizar(); return; }
+    const foiExtra = await tocarExtra(t.dataset.acao, meta, t);
+    if (!ctx.vivo()) return; // a pessoa abriu outra ficha enquanto gravava: não desenha esta por cima
+    if (foiExtra) { atualizar(); return; }
     if (t.dataset.r === 'tirar') { gravarNota(null); return; }
     if (t.dataset.acao === 'visto') {
       dados.marcar(meta, m.visto ? { visto: false, nota: null } : { visto: true, quero: false });

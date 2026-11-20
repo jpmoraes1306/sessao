@@ -4,7 +4,7 @@ import * as dados from '../dados.js';
 import * as nuvem from '../nuvem.js';
 import { simboloEscondido } from '../ovo.js';
 import * as rankings from '../rankings.js';
-import { $, esc, nota, selo, foto, tile, poster, erroFicha, dataBR, corDe } from '../ui.js';
+import { $, esc, nota, selo, foto, tile, poster, erroFicha, dataBR, corDe, hoje } from '../ui.js';
 
 // preferências de ordenação valem para todas as pessoas enquanto o app está aberto
 let ordem = 'nota';
@@ -41,12 +41,11 @@ function blocoRankings(p, achadas, abertas) {
   else if (vistos >= 2) meuBloco = `<section><h2>Seu ranking</h2><div class="grupo"><div class="lin"><span class="n">Você ainda não ranqueou ${primeiroNome}<small>Já viu ${vistos} títulos. Começa pela ordem das suas notas.</small></span><a class="btn small on-star" href="#/ranking/pessoa-${p.id}">Montar</a></div></div></section>`;
   return meuBloco + outros.map((l) => `<section><h2>Ranking de ${esc(nuvem.pessoa(l.user_id)?.nome || 'vocês')} <small>lista "${esc(l.nome)}"</small></h2>${lista(l, meu, 'você')}</section>`).join('');
 }
+/** Idade em anos completos, comparando as datas como texto (AAAA-MM-DD) para o fuso não tirar um dia. */
 function idade(nasc, morte) {
-  const fim = morte ? new Date(morte) : new Date();
-  const n = new Date(nasc);
-  let a = fim.getFullYear() - n.getFullYear();
-  if (fim.getMonth() < n.getMonth() || (fim.getMonth() === n.getMonth() && fim.getDate() < n.getDate())) a--;
-  return a;
+  const fim = morte || hoje();
+  const a = Number(fim.slice(0, 4)) - Number(nasc.slice(0, 4));
+  return fim.slice(5) < nasc.slice(5) ? a - 1 : a;
 }
 
 export async function abrir(el, id, ctx) {
@@ -98,7 +97,7 @@ export async function abrir(el, id, ctx) {
   const [a, b] = corDe(p.nome);
   const vida = [
     p.nascimento ? `${dataBR(p.nascimento)}${p.morte ? ` – ${dataBR(p.morte)}` : ''} · ${idade(p.nascimento, p.morte)} anos` : '',
-    p.local,
+    esc(p.local || ''),
   ].filter(Boolean).join('<br>');
 
   el.innerHTML = `

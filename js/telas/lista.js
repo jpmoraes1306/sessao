@@ -71,15 +71,17 @@ export async function render(el) {
   }
 
   if (filtro.lista === 'mix') esperando('Montando o Mix de vocês dois…');
+  const fora = () => minhaVez !== vez || el.dataset.aba !== 'lista'; // a pessoa já foi para outra aba
   let dadosDaLista;
-  try { dadosDaLista = await itensDa(filtro.lista); } catch { dadosDaLista = { itens: [] }; }
-  if (minhaVez !== vez) return;
+  try { dadosDaLista = await itensDa(filtro.lista); } catch { dadosDaLista = null; }
+  if (fora()) return;
+  if (!dadosDaLista) { el.innerHTML = moldura('<p class="note">Não deu para carregar esta lista. Confira a internet e toque nela de novo.</p>'); ligar(); return; }
   let todos = dadosDaLista.itens;
 
   if (filtro.meus && todos.length) {
     esperando('Conferindo o que está nos seus streamings…');
     todos = await streaming.filtrar(todos, (feito, total) => { const b = document.getElementById('andamento-filtro'); if (b) b.style.width = `${(feito / total) * 100}%`; });
-    if (minhaVez !== vez) return;
+    if (fora()) return;
   }
 
   const generos = [...new Set(todos.flatMap((t) => t.generos || []))].sort((a, b) => a.localeCompare(b));
@@ -92,7 +94,7 @@ export async function render(el) {
   if ((filtro.ordem === 'nota' || filtro.ordem === 'nota-menor') && todos.length) {
     if (notasfora.faltam(todos)) esperando('Buscando as notas do IMDb, Rotten Tomatoes e Metacritic…');
     const ref = await notasfora.paraLista(todos, (feito, total) => { const b = document.getElementById('andamento-filtro'); if (b) b.style.width = `${(feito / total) * 100}%`; });
-    if (minhaVez !== vez) return;
+    if (fora()) return;
     compara = filtro.ordem === 'nota' ? (a, b) => ref(b).nota - ref(a).nota : (a, b) => (ref(a).nota || 99) - (ref(b).nota || 99);
   }
 
