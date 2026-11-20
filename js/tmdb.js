@@ -228,10 +228,23 @@ export async function reviewsTodas(tipo, id) {
   return [...pt, ...en].filter((r) => r.texto && !vistas.has(r.id) && vistas.add(r.id));
 }
 
-/** Cenas de um filme (imagens largas, sem título escrito), para o frame do dia. */
+/** Quadros de verdade de um filme, para o jogo do frame: os que o YouTube tira dos clipes, trailers e teasers
+    oficiais (a 25%, 50% e 75% do vídeo). Devolve os endereços das imagens; clipes primeiro, que são só cena do filme. */
+export async function quadrosDoFilme(id) {
+  const d = await api(`movie/${id}/videos`, { language: 'en-US' }, { ttl: 30 * DIA });
+  const ORDEM = { Clip: 0, Trailer: 1, Teaser: 2 }; // making of e entrevistas ficam de fora
+  const videos = (d.results || []).filter((v) => v.site === 'YouTube' && v.type in ORDEM && /^[\w-]{6,20}$/.test(v.key || ''))
+    .sort((a, b) => ORDEM[a.type] - ORDEM[b.type] || Number(b.official) - Number(a.official));
+  return videos.slice(0, 6).flatMap((v) => [2, 1, 3].map((n) => `https://i.ytimg.com/vi/${v.key}/maxres${n}.jpg`));
+}
+
+/** Imagens largas e sem título do TMDB, para quando o filme não tem vídeo. As mais votadas costumam ser arte de
+    divulgação (pôster, papel de parede), então elas vão para o fim da fila: as cenas ficam na frente. */
 export async function cenasDoFilme(id) {
   const d = await api(`movie/${id}/images`, { include_image_language: 'null' }, { ttl: 30 * DIA });
-  return (d.backdrops || []).filter((b) => b.aspect_ratio > 1.7 && b.aspect_ratio < 1.85 && b.width >= 1280).map((b) => b.file_path);
+  const largas = (d.backdrops || []).filter((b) => b.aspect_ratio > 1.7 && b.aspect_ratio < 1.85 && b.width >= 1280).map((b) => b.file_path);
+  const corte = largas.length >= 12 ? 6 : Math.floor(largas.length / 3);
+  return [...largas.slice(corte), ...largas.slice(0, corte)];
 }
 
 /** Filmes dirigidos pela pessoa, da maior nota para a menor. */

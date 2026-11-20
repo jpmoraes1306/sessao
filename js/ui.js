@@ -11,6 +11,14 @@ export const norm = (s) => String(s).normalize('NFD').replace(/[̀-ͯ]/g, '').to
 /* ---------- datas ---------- */
 const SEM = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb'];
 export const hoje = () => new Date().toLocaleDateString('sv-SE', { timeZone: 'America/Sao_Paulo' }); // AAAA-MM-DD, sempre o dia de Brasília (igual ao do servidor e para os dois)
+/* A rodada dos jogos (caça ao símbolo, Dafoe e Cage, frame) troca duas vezes por dia, à meia-noite e ao meio-dia de
+   Brasília. A chave é o dia de manhã ("2026-11-20") e o dia com "b" da tarde em diante ("2026-11-20b"). */
+const horaDeBrasilia = () => Number(new Intl.DateTimeFormat('en-GB', { timeZone: 'America/Sao_Paulo', hour: '2-digit', hourCycle: 'h23' }).format(new Date()));
+export const rodada = () => hoje() + (horaDeBrasilia() >= 12 ? 'b' : '');
+/** Número que cresce de um em um a cada rodada (para os sorteios darem igual nos dois celulares). */
+export const numeroDaRodada = (chave = rodada()) => Math.floor(Date.parse(`${chave.slice(0, 10)}T12:00:00Z`) / 864e5) * 2 + (chave.length > 10 ? 1 : 0);
+/** Quando a rodada troca: "ao meio-dia" ou "à meia-noite". */
+export const proximaTroca = () => (horaDeBrasilia() >= 12 ? 'à meia-noite' : 'ao meio-dia');
 export const dataBR = (iso) => (iso ? iso.slice(0, 10).split('-').reverse().join('/') : '');
 const meioDia = (iso) => new Date(`${iso.slice(0, 10)}T12:00:00`);
 /** "sex, 22/11" (com o ano quando não é o ano atual). */

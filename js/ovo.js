@@ -1,40 +1,42 @@
 // Easter egg: "caça ao símbolo".
-// - Cada dia um símbolo de cinema (o app avisa qual é) fica escondido num lugar diferente do app.
-// - Quem acha primeiro ganha o dia; o placar do mês fica guardado na conta.
-// - Achar abre um pop-up com o Dafoe e o Cage do dia (uma cena grande de cada) e o caminho para o frame do dia.
-// - Símbolo e esconderijo dependem só da data, então são os mesmos nos dois celulares.
+// - A cada rodada (são duas por dia: troca à meia-noite e ao meio-dia de Brasília) um símbolo de cinema, que o app
+//   avisa qual é, fica escondido num lugar diferente do app.
+// - Quem acha primeiro ganha a rodada; o placar do mês fica guardado na conta.
+// - Achar abre um pop-up com o Dafoe e o Cage da rodada (uma cena grande de cada) e o caminho para o frame.
+// - Símbolo e esconderijo dependem só da rodada, então são os mesmos nos dois celulares.
 import { img } from './tmdb.js';
 import * as nuvem from './nuvem.js';
-import { esc, hoje, toast } from './ui.js';
+import { esc, hoje, rodada, numeroDaRodada, proximaTroca, toast } from './ui.js';
 
 const CAGE = { id: 2963, nome: 'Nicolas Cage', rosto: '/y1RtezurZYveYkVNRht7CwEgSYY.jpg' };
 const DAFOE = { id: 5293, nome: 'Willem Dafoe', rosto: '/ui8e4sgZAwMPi3hzEO53jyBJF9B.jpg' };
 
-// [imagem no TMDB, filme]: cenas escolhidas a dedo, das mais caricatas
+// [imagem no TMDB, filme]. Regra para entrar aqui: o ator aparece de verdade, bem visível, com cara ou situação
+// cômica ou caricata. Cada imagem foi olhada uma a uma em 20/11/2026; as sérias, tristes, escuras ou sem o ator
+// saíram. Ao acrescentar uma, ABRIR A IMAGEM E OLHAR antes: o nome do filme não garante nada.
 const CENAS = {
   [CAGE.id]: [
-    ['/rrmavNBz1aKSY11jbGGnj1Q5CTo.jpg', "Vampire's Kiss"], ['/88cDpJDbf3jky7VlyA24vFiAupm.jpg', 'The Wicker Man'],
-    ['/1fldJZ43ftMj3gKbhf8idjI7fWO.jpg', 'Con Air'], ['/95cYzbSp13ChoUYlDwj1fPL4Q6X.jpg', 'Raising Arizona'],
-    ['/1XA9KiP7NDWb6Dre3RGXBGc5e9o.jpg', 'Mandy'], ['/k4TpF7wl1FMPzHRJNudODAm7h0P.jpg', 'The Unbearable Weight of Massive Talent'],
-    ['/6CBKRe9ossDiQ7UaSfvG4I07hK7.jpg', 'Renfield'], ['/fUmWfASEW1D4R2pvZPBpHNufAeL.jpg', "Vampire's Kiss"],
-    ['/2WRe1y5S1jGWTKUcSPPmD1Ixq56.jpg', 'Dream Scenario'], ['/nj0TRnK46lY1Xyjynif5leQf3XS.jpg', 'Wild at Heart'],
-    ['/yD3BbUMFkfVIW2BvPWdKDAqyY4g.jpg', "Willy's Wonderland"], ['/sdpxQx4AFfb9UxLtkuJUGF2UR5T.jpg', 'The Wicker Man'],
-    ['/uFvueAhlKsXQacjiKxGBgnBqarf.jpg', 'Pig'], ['/ubVqplLMa6X51Y8yhRcbbnApXWe.jpg', "Vampire's Kiss"],
-    ['/xLyQQTfbiC4iPam3jUOyLprg24x.jpg', 'The Unbearable Weight of Massive Talent'], ['/4oLlnVSOUNiOS4DIMMUai2TGQUg.jpg', 'Raising Arizona'],
-    ['/8njrrfYfrei0IDw9Tm8PgXquk7Z.jpg', 'Renfield'], ['/vlbTPrt664RAIeMYtgnqCYQPfgR.jpg', 'Dream Scenario'],
-    ['/xjjUSZnZugtGgVNtLEF92D0I9dI.jpg', "Vampire's Kiss"], ['/6xJ2odkMFmO2LptVUBR8t8wBldQ.jpg', 'Wild at Heart'],
+    ['/fUmWfASEW1D4R2pvZPBpHNufAeL.jpg', "Vampire's Kiss"],                          // olhos arregalados, o meme
+    ['/k4TpF7wl1FMPzHRJNudODAm7h0P.jpg', 'The Unbearable Weight of Massive Talent'], // de chapéu, fazendo arminha com os dedos
+    ['/6CBKRe9ossDiQ7UaSfvG4I07hK7.jpg', 'Renfield'],                                // Drácula de presas à mostra
+    ['/vlbTPrt664RAIeMYtgnqCYQPfgR.jpg', 'Dream Scenario'],                          // careca, ao lado do carro pichado "LOSER"
+    ['/rrmavNBz1aKSY11jbGGnj1Q5CTo.jpg', "Vampire's Kiss"],                          // surtando ao telefone
+    ['/95cYzbSp13ChoUYlDwj1fPL4Q6X.jpg', 'Raising Arizona'],                         // de bigode, segurando o bebê
+    ['/xLyQQTfbiC4iPam3jUOyLprg24x.jpg', 'The Unbearable Weight of Massive Talent'], // rindo ao volante
+    ['/ubVqplLMa6X51Y8yhRcbbnApXWe.jpg', "Vampire's Kiss"],                          // de braços abertos, boca aberta, na rua
+    ['/2WRe1y5S1jGWTKUcSPPmD1Ixq56.jpg', 'Dream Scenario'],                          // retrato careca, de suéter
+    ['/8njrrfYfrei0IDw9Tm8PgXquk7Z.jpg', 'Renfield'],                                // Drácula encarando
+    ['/xjjUSZnZugtGgVNtLEF92D0I9dI.jpg', "Vampire's Kiss"],                          // de dentes de vampiro
   ],
   [DAFOE.id]: [
-    ['/cRQEgHV829oEtnhEtG4S8yDyxSU.jpg', 'Spider-Man'], ['/rm31SGOzmpxhdjZmM2aZiZCcyT.jpg', 'Speed 2: Cruise Control'],
-    ['/i51wnN9phojyn14xHjQt6rv1r0x.jpg', 'The Lighthouse'], ['/tjyilNxcCG3uHR0xG2n5E5rxEx3.jpg', 'Shadow of the Vampire'],
-    ['/51Y6sC7CBXG3OEmoFnYCUuypfJi.jpg', 'Poor Things'], ['/vMFRG0QPq59MRGBAeAAV1DXok6w.jpg', 'The Boondock Saints'],
-    ['/xt3zpT7LBVv74bLIqLtsS2kknEZ.jpg', 'The Lighthouse'], ['/dNplOw9U5IzlY7nNiaMS0JSVobp.jpg', 'Kinds of Kindness'],
-    ['/4JDEpCKXuz0XheCp8p7S7Fo9APm.jpg', 'Shadow of the Vampire'], ['/5zSm9LFd566T67yhcinso7eFQSx.jpg', 'The Life Aquatic with Steve Zissou'],
-    ['/zz7yNDyF91goWWU7WuCWPaBz3vM.jpg', 'Inside'], ['/tNE9HGcFOH8EpCmzO7XCYwqguI0.jpg', 'The Lighthouse'],
-    ['/ArM4yzl1oxCrJVUngw5lKAEpkb7.jpg', 'Nosferatu'],
+    ['/rm31SGOzmpxhdjZmM2aZiZCcyT.jpg', 'Speed 2: Cruise Control'], // sorriso de maluco, cabelo cacheado
+    ['/cRQEgHV829oEtnhEtG4S8yDyxSU.jpg', 'Spider-Man'],             // o sorriso do Norman Osborn
+    ['/tjyilNxcCG3uHR0xG2n5E5rxEx3.jpg', 'Shadow of the Vampire'],  // vampiro de garras, de perfil
+    ['/51Y6sC7CBXG3OEmoFnYCUuypfJi.jpg', 'Poor Things'],            // olhos arregalados, rosto costurado
+    ['/vOo46SFy6ar7WB0qNOXBKTldCNX.jpg', 'The Lighthouse'],         // lobo do mar de cachimbo
+    ['/5BSvHKPhpsBFMJbq9dg2Dwoc9O8.jpg', 'Shadow of the Vampire'],  // vampiro sorrindo de lado
   ],
 };
-
 // os símbolos: [nome com artigo, desenho]. Traço simples, no mesmo estilo dos ícones do app.
 const SIMBOLOS = [
   ['a claquete', '<path d="M3.5 10.5h17v9h-17z"/><path d="M3.5 10.5L3 7.5l16.5-3 .5 3z"/><path d="M7 6.8l1.5 2.8M11.5 6l1.5 2.8M16 5.1l1.5 2.8"/>'],
@@ -60,23 +62,26 @@ const LUGARES = {
 };
 const NOMES = Object.keys(LUGARES);
 
-const numeroDoDia = (iso = hoje()) => Math.floor(Date.parse(`${iso}T12:00:00Z`) / 864e5);
-/** Embaralha o dia para o esconderijo e o símbolo não seguirem o dia da semana. */
-const sorteio = (dia, n, sal = 0) => (Math.imul(dia + sal, 2654435761) >>> 8) % n;
+/** Embaralha a rodada para o esconderijo e o símbolo não seguirem uma ordem previsível. */
+const sorteio = (n, total, sal = 0) => (Math.imul(n + sal, 2654435761) >>> 8) % total;
+/** Sorteio que não repete o da rodada anterior: de uma rodada para a outra, o lugar e o símbolo sempre mudam. */
+const semRepetir = (n, total, sal = 0) => { const a = sorteio(n, total, sal); return a === sorteio(n - 1, total, sal) ? (a + 1) % total : a; };
 
-export const esconderijoDeHoje = () => NOMES[sorteio(numeroDoDia(), NOMES.length)];
+/** Os nomes dizem "de hoje", mas valem para a rodada atual (ver `rodada` em ui.js). */
+export const esconderijoDeHoje = () => NOMES[semRepetir(numeroDaRodada(), NOMES.length)];
 export const dicaDeHoje = () => LUGARES[esconderijoDeHoje()];
-const simboloDoDia = (dia) => SIMBOLOS[sorteio(dia, SIMBOLOS.length, 7)];
-/** O símbolo escondido hoje (ou daqui a `mais` dias): { nome, svg }. */
-export const simboloDeHoje = (mais = 0) => { const s = simboloDoDia(numeroDoDia() + mais); return { nome: s[0], svg: desenho(s) }; };
+export { proximaTroca };
+const simboloDa = (n) => SIMBOLOS[semRepetir(n, SIMBOLOS.length, 7)];
+/** O símbolo escondido agora (ou daqui a `mais` rodadas): { nome, svg }. */
+export const simboloDeHoje = (mais = 0) => { const s = simboloDa(numeroDaRodada() + mais); return { nome: s[0], svg: desenho(s) }; };
 
 /* ---------- quem achou (corrida do dia e placar do mês) ---------- */
 let achados = [];      // linhas do mês: { dia, user_id, achado_em }
 let dono = null;
 let carregando = null;
-const LOCAL = 'sessao:ovo:achado'; // dia em que este aparelho achou (vale também sem login)
-// guarda o dia e de quem foi, para o achado de um não valer para o outro no mesmo aparelho
-const marcaLocal = () => `${hoje()}|${nuvem.usuario()?.id || ''}`;
+const LOCAL = 'sessao:ovo:achado'; // rodada em que este aparelho achou (vale também sem login)
+// guarda a rodada e de quem foi, para o achado de um não valer para o outro no mesmo aparelho
+const marcaLocal = () => `${rodada()}|${nuvem.usuario()?.id || ''}`;
 const achouAqui = () => { try { return localStorage.getItem(LOCAL) === marcaLocal(); } catch { return false; } };
 
 async function carregar() {
@@ -98,19 +103,19 @@ nuvem.aoMudar(() => {
 });
 
 const hora = (iso) => new Date(iso).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
-const doDia = () => achados.filter((a) => a.dia === hoje()).sort((a, b) => a.achado_em.localeCompare(b.achado_em));
-/** Você já achou o símbolo de hoje? Devolve a hora ("08:12"), true (sem login) ou false. */
+const doDia = () => achados.filter((a) => a.dia === rodada()).sort((a, b) => a.achado_em.localeCompare(b.achado_em));
+/** Você já achou o símbolo desta rodada? Devolve a hora ("08:12"), true (sem login) ou false. */
 export function acheiHoje() {
   const eu = nuvem.usuario()?.id;
   const meu = eu ? doDia().find((a) => a.user_id === eu) : null;
   return meu ? hora(meu.achado_em) : achouAqui();
 }
-/** Placar do mês: quantos dias cada um achou primeiro. null sem login ou sem o outro. */
+/** Placar do mês: em quantas rodadas cada um achou primeiro. null sem login ou sem o outro. */
 export function placarDoMes() {
   const eu = nuvem.usuario()?.id;
   const o = nuvem.outro();
   if (!eu || !o) return null;
-  const primeiro = new Map(); // dia -> quem achou antes
+  const primeiro = new Map(); // rodada -> quem achou antes
   for (const a of [...achados].sort((x, y) => x.achado_em.localeCompare(y.achado_em))) if (!primeiro.has(a.dia)) primeiro.set(a.dia, a.user_id);
   const de = (id) => [...primeiro.values()].filter((u) => u === id).length;
   return { eu: de(eu), ele: de(o.id), nomeDele: o.nome };
@@ -124,25 +129,25 @@ export function htmlPlacar(p, rotulo) {
 export function simboloEscondido(lugar) {
   if (lugar !== esconderijoDeHoje()) return '';
   const s = simboloDeHoje();
-  return `<button class="ovo-s${acheiHoje() ? ' achado' : ''}" data-ovo="${hoje()}" aria-label="Símbolo escondido de hoje: ${esc(s.nome)}">${s.svg}</button>`;
+  return `<button class="ovo-s${acheiHoje() ? ' achado' : ''}" data-ovo="${rodada()}" aria-label="Símbolo escondido da vez: ${esc(s.nome)}">${s.svg}</button>`;
 }
 function marcarAchado() {
   if (acheiHoje()) document.querySelectorAll('[data-ovo]').forEach((b) => b.classList.add('achado'));
 }
 
-/** Registra que você achou (uma vez por dia) e avisa o outro, se ele ainda não achou. */
+/** Registra que você achou (uma vez por rodada) e avisa o outro, se ele ainda não achou. */
 async function registrar() {
   try { localStorage.setItem(LOCAL, marcaLocal()); } catch { /* sem armazenamento, vale só nesta visita */ }
   await pronto();
   await enviar();
 }
-/** Grava na conta o achado de hoje, se ainda não estiver lá. */
+/** Grava na conta o achado desta rodada, se ainda não estiver lá. */
 async function enviar() {
   const b = nuvem.usuario() ? nuvem.banco() : null;
   if (!b) return;
   const eu = nuvem.usuario().id;
   if (doDia().some((a) => a.user_id === eu)) return;
-  const { error } = await b.from('ovo_achados').upsert({ dia: hoje(), user_id: eu }, { onConflict: 'dia,user_id', ignoreDuplicates: true });
+  const { error } = await b.from('ovo_achados').upsert({ dia: rodada(), user_id: eu }, { onConflict: 'dia,user_id', ignoreDuplicates: true });
   if (error) return;
   await carregar().catch(() => {});
   // o aviso no celular do outro sai pela função do servidor; se falhar, a corrida continua valendo
@@ -151,7 +156,7 @@ async function enviar() {
 
 export async function abrirOvo() {
   if (document.querySelector('.ovo')) return;
-  const dia = numeroDoDia();
+  const dia = numeroDaRodada();
   const s = simboloDeHoje();
   const caixa = document.createElement('div');
   caixa.className = 'ovo ovo-dia';
@@ -162,12 +167,12 @@ export async function abrirOvo() {
     const primeiro = hojeAchados[0];
     const o = nuvem.outro();
     let quem = 'Entre na sua conta para disputar com o outro quem acha primeiro.';
-    if (meu && primeiro.user_id === eu) quem = `Você achou primeiro hoje, às ${hora(meu.achado_em)}.${o && hojeAchados.length < 2 ? ` ${esc(o.nome)} ainda está procurando.` : ''}`;
+    if (meu && primeiro.user_id === eu) quem = `Você achou primeiro nesta rodada, às ${hora(meu.achado_em)}.${o && hojeAchados.length < 2 ? ` ${esc(o.nome)} ainda está procurando.` : ''}`;
     else if (meu) quem = `${esc(nuvem.pessoa(primeiro.user_id)?.nome || 'O outro')} achou primeiro, às ${hora(primeiro.achado_em)}. Você achou às ${hora(meu.achado_em)}.`;
     else if (eu) quem = anotando ? 'Anotando que você achou…' : 'Sem internet para anotar agora. O achado fica guardado e sobe quando a conexão voltar.';
     const placar = placarDoMes();
     const amanha = simboloDeHoje(1);
-    return `<div class="ovo-c" role="dialog" aria-modal="true" aria-label="Você achou o símbolo de hoje">
+    return `<div class="ovo-c" role="dialog" aria-modal="true" aria-label="Você achou o símbolo da vez">
       <div class="ovo-t"><span class="ovo-g">${s.svg}</span><div><h3>Você achou ${esc(s.nome)}</h3><p>${quem}</p></div></div>
       <div class="ovo-f">${[DAFOE, CAGE].map((p) => {
         const lista = CENAS[p.id];
@@ -176,8 +181,8 @@ export async function abrirOvo() {
           <span><b>${esc(p.nome)}</b> em ${esc(filme)}</span></a>`;
       }).join('')}</div>
       ${placar ? htmlPlacar(placar, 'Quem achou primeiro, placar') : ''}
-      ${eu && o ? '<a class="btn on-star" href="#/frame/hoje">Jogar o frame do dia</a>' : ''}
-      <p class="ovo-a">Amanhã o símbolo escondido é <span class="ovo-m">${amanha.svg}</span> <b>${esc(amanha.nome)}</b>.</p>
+      ${eu && o ? '<a class="btn on-star" href="#/frame/hoje">Jogar o frame desta rodada</a>' : ''}
+      <p class="ovo-a">Tudo troca ${proximaTroca()}: o próximo símbolo é <span class="ovo-m">${amanha.svg}</span> <b>${esc(amanha.nome)}</b>.</p>
       <button class="btn small" data-fechar style="align-self:center">Fechar</button></div>`;
   };
   let anotando = true;
@@ -198,7 +203,7 @@ document.addEventListener('click', (e) => {
   const s = e.target.closest('[data-ovo]');
   if (!s) return;
   e.preventDefault(); e.stopPropagation();
-  // um símbolo que ficou na tela desde ontem não vale para hoje: o de hoje é outro e está em outro lugar
-  if (s.dataset.ovo !== hoje()) { s.remove(); toast('Esse era o símbolo de ontem. O de hoje está escondido em outro lugar.'); return; }
+  // um símbolo que ficou na tela desde a rodada anterior não vale: o de agora é outro e está em outro lugar
+  if (s.dataset.ovo !== rodada()) { s.remove(); toast('Esse era o símbolo da rodada anterior. O de agora está escondido em outro lugar.'); return; }
   abrirOvo();
 }, true);
