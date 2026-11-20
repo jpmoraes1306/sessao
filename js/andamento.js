@@ -2,7 +2,7 @@
 import * as tmdb from './tmdb.js';
 import * as dados from './dados.js';
 
-const hoje = () => new Date().toLocaleDateString('sv-SE');
+const hoje = () => new Date().toLocaleDateString('sv-SE', { timeZone: 'America/Sao_Paulo' }); // o dia do app é sempre o de Brasília
 
 /** Séries que a pessoa acompanha (marcou "Acompanhar" ou já tem episódio visto), da mexida mais recente para a mais antiga. */
 export function acompanhadas() {

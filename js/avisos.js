@@ -97,7 +97,10 @@ nuvem.aoMudar(async () => {
   if (eu === dono) return;
   dono = eu;
   marcadas = new Set();
-  if (!eu) return;
+  const avisar = () => { if (typeof window !== 'undefined') window.dispatchEvent(new Event('avisos:carregados')); };
+  if (!eu) { avisar(); return; }
   const { data } = await nuvem.banco().from('avisos_estreia').select('tmdb_id').eq('user_id', eu);
+  if (dono !== eu) return; // outra pessoa entrou enquanto a resposta vinha: os avisos dela chegam no pedido dela
   marcadas = new Set((data || []).map((x) => x.tmdb_id));
+  avisar();
 });

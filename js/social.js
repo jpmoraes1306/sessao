@@ -82,15 +82,36 @@ export async function reviews(tipo, id) {
   const b = nuvem.usuario() ? nuvem.banco() : null;
   if (!b) return [];
   const eu = nuvem.usuario().id;
-  const [{ data: linhas }, { data: curtidas }] = await Promise.all([
+  const [{ data: linhas }, { data: curtidas }, { data: comentarios }] = await Promise.all([
     b.from('avaliacoes').select('user_id, nota, review, spoiler, review_em').eq('tipo', tipo).eq('tmdb_id', id).not('review', 'is', null),
     b.from('curtidas_review').select('user_id, autor_id').eq('tipo', tipo).eq('tmdb_id', id),
+    b.from('comentarios_review').select('id, user_id, autor_id, texto, criado_em').eq('tipo', tipo).eq('tmdb_id', id).order('criado_em'),
   ]);
   return (linhas || []).filter((l) => (l.review || '').trim()).map((l) => ({
     ...l, nota: l.nota == null ? null : Number(l.nota), eu: l.user_id === eu, nome: nuvem.pessoa(l.user_id)?.nome || '',
     curtidaPorMim: (curtidas || []).some((c) => c.user_id === eu && c.autor_id === l.user_id),
     curtidaPeloOutro: (curtidas || []).some((c) => c.user_id !== eu && c.autor_id === l.user_id),
+    comentarios: (comentarios || []).filter((c) => c.autor_id === l.user_id).map(comentarioDe),
   }));
+}
+const comentarioDe = (c) => ({ id: c.id, user_id: c.user_id, eu: c.user_id === nuvem.usuario()?.id, nome: nuvem.pessoa(c.user_id)?.nome || '', texto: c.texto, criado_em: c.criado_em });
+
+/** Comenta a review de `autor` sobre o título (pode ser a sua própria, para responder). Devolve o comentário gravado ou null. */
+export async function comentarReview(tipo, id, autor, texto) {
+  const b = nuvem.banco();
+  const eu = nuvem.usuario()?.id;
+  const limpo = (texto || '').trim().slice(0, 1000);
+  if (!b || !eu || !limpo) return null;
+  const { data, error } = await b.from('comentarios_review').insert({ user_id: eu, autor_id: autor, tipo, tmdb_id: id, texto: limpo }).select('id, user_id, autor_id, texto, criado_em').single();
+  return error || !data ? null : comentarioDe(data);
+}
+/** Apaga um comentário seu. */
+export async function apagarComentario(idComentario) {
+  const b = nuvem.banco();
+  const eu = nuvem.usuario()?.id;
+  if (!b || !eu) return false;
+  const { error } = await b.from('comentarios_review').delete().eq('id', idComentario).eq('user_id', eu);
+  return !error;
 }
 
 export async function curtirReview(tipo, id, autor, sim) {
@@ -131,8 +152,16 @@ export async function feed(limite = 14, soDoOutro = true) {
   if (soDoOutro) pedido = pedido.neq('user_id', nuvem.usuario().id);
   const { data, error } = await pedido.order('atualizado_em', { ascending: false }).limit(limite);
   if (error) return [];
-  const info = await dados.resumos(data);
-  return data.map((a) => {
+  // comentários do outro em reviews (as suas ou as dele) entram na atividade, para você saber que há resposta
+  let comentou = [];
+  if (soDoOutro) {
+    const r = await b.from('comentarios_review').select('user_id, tipo, tmdb_id, criado_em').neq('user_id', nuvem.usuario().id).order('criado_em', { ascending: false }).limit(6);
+    const vistos = new Set();
+    comentou = (r.data || []).filter((c) => !vistos.has(k(c.tipo, c.tmdb_id)) && vistos.add(k(c.tipo, c.tmdb_id))).map((c) => ({ user_id: c.user_id, tipo: c.tipo, tmdb_id: c.tmdb_id, comentou: true, atualizado_em: c.criado_em }));
+  }
+  const tudo = [...data, ...comentou].sort((x, y) => String(y.atualizado_em).localeCompare(String(x.atualizado_em))).slice(0, limite);
+  const info = await dados.resumos(tudo);
+  return tudo.map((a) => {
     const r = info.get(k(a.tipo, a.tmdb_id)) || {};
     return { ...a, nota: a.nota == null ? null : Number(a.nota), eu: a.user_id === nuvem.usuario().id, nome: nuvem.pessoa(a.user_id)?.nome || '', titulo: r.titulo || 'Sem título', ano: r.ano, poster: r.poster || '' };
   });

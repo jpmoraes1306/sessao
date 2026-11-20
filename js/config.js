@@ -37,8 +37,16 @@ const PADRAO = [8, 1796, 1899, 119, 2100, 337, 283, 350]; // Netflix, HBO Max, P
 
 /** provider_id -> nome do serviço, só dos que a pessoa assina. Muda quando o perfil carrega. */
 export const MEUS_STREAMINGS = new Map();
+const K_STREAMINGS = 'sessao:streamings';
+/** `ids` = os serviços do perfil de quem está logado (lista vazia = não assina nenhum); null = ninguém logado (padrão). */
 export function definirStreamings(ids) {
   MEUS_STREAMINGS.clear();
   for (const s of SERVICOS) if (s.ids.some((i) => (ids || PADRAO).includes(i))) for (const i of s.ids) MEUS_STREAMINGS.set(i, s.nome);
+  // fica guardado para o app abrir já do jeito certo (também sem internet), sem mostrar os filtros de quem não assina nada
+  try { if (ids) localStorage.setItem(K_STREAMINGS, JSON.stringify(ids)); else localStorage.removeItem(K_STREAMINGS); } catch { /* vale só nesta visita */ }
 }
-definirStreamings(PADRAO);
+/** A pessoa assina algum streaming? Quem não assina não vê os filtros nem os destaques de "meus streamings". */
+export const temStreamings = () => MEUS_STREAMINGS.size > 0;
+let guardados = null;
+try { guardados = JSON.parse(localStorage.getItem(K_STREAMINGS) || 'null'); } catch { /* usa o padrão */ }
+definirStreamings(Array.isArray(guardados) ? guardados : null);

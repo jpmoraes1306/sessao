@@ -41,14 +41,16 @@ export function usuario() {
 }
 
 async function aoEntrar() {
-  if (!sessao || !cliente) { perfil = null; perfis = []; return; }
+  if (!sessao || !cliente) { perfil = null; perfis = []; definirStreamings(null); return; } // saiu: os streamings de quem estava logado não ficam para o próximo
   const [{ data: segredos, error: erroSegredos }, { data: todos }] = await Promise.all([
     cliente.from('segredos').select('nome, valor'),
     cliente.from('perfis').select('*').order('criado_em'),
   ]);
   perfis = todos || [];
   perfil = perfis.find((p) => p.id === sessao.user.id) || null;
-  if (perfil?.streamings) definirStreamings(perfil.streamings);
+  // os streamings são de cada perfil: valem os de quem entrou, mesmo que a lista esteja vazia (não assina nenhum).
+  // Se a leitura do perfil falhou (sem internet), fica o que estava guardado no aparelho.
+  if (perfil) definirStreamings(perfil.streamings || []);
   // Chaves do TMDB e da OMDb: ficam guardadas no banco (só vocês dois leem) e chegam sozinhas
   // depois do login. Se o banco ainda não tem e este aparelho tem, o app guarda as daqui.
   const s = Object.fromEntries((segredos || []).map((x) => [x.nome, x.valor]));

@@ -189,7 +189,7 @@ export function blocoProvedores(bruto) {
   const tenho = p.stream.filter((x) => MEUS_STREAMINGS.has(x.id));
   const resumo = tenho.length
     ? `<p class="note ok">Está nos seus streamings: ${[...new Set(tenho.map((x) => MEUS_STREAMINGS.get(x.id)))].join(', ')}.</p>`
-    : (p.stream.length ? '<p class="note">Não está nos seus streamings.</p>' : '<p class="note">Fora dos streamings por assinatura. Só para alugar ou comprar.</p>');
+    : (p.stream.length ? (MEUS_STREAMINGS.size ? '<p class="note">Não está nos seus streamings.</p>' : '') : '<p class="note">Fora dos streamings por assinatura. Só para alugar ou comprar.</p>');
   return `<div class="provs">${resumo}${grupo('Streaming', p.stream)}${grupo('Alugar', p.alugar)}${grupo('Comprar', p.comprar)}</div>
     <p class="note">Só serviços disponíveis no Brasil. Fonte: JustWatch, via TMDB.</p>`;
 }

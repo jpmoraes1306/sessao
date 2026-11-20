@@ -44,7 +44,8 @@ export function esquecer() { guardado = null; }
 
 /** { porcento, itens: [{ tipo, id, titulo, ..., grupo: 1|2|3, motivo }] } */
 export async function montar() {
-  if (guardado && Date.now() - guardado.quando < 30 * 60e3) {
+  // o Mix guardado é de quem o montou: se outra pessoa entrou neste aparelho, monta de novo para ela
+  if (guardado && guardado.de === (nuvem.usuario()?.id || null) && Date.now() - guardado.quando < 30 * 60e3) {
     // o Mix fica guardado por meia hora, mas o que você viu ou tirou do Quero ver nesse meio-tempo sai na hora
     const ainda = (t) => { const m = dados.titulo(t.tipo, t.id); return !(m.visto || m.nota != null) && (t.grupo === 3 || m.quero || social.doOutro(t.tipo, t.id)?.quer); };
     return { ...guardado.resultado, itens: guardado.resultado.itens.filter(ainda) };
@@ -120,6 +121,6 @@ export async function montar() {
 
   itens.sort((a, b) => b.ordem - a.ordem);
   const resultado = { porcento: social.compatibilidade()?.porcento ?? null, itens: [...itens, ...intercalado, ...terceiro] };
-  if (outroPronto) guardado = { quando: Date.now(), resultado }; // sem os dados do outro o Mix sai incompleto: não guarda
+  if (outroPronto) guardado = { quando: Date.now(), de: nuvem.usuario()?.id || null, resultado }; // sem os dados do outro o Mix sai incompleto: não guarda
   return resultado;
 }

@@ -69,7 +69,7 @@ export async function salvar(p, itens, existente) {
   if (!b || !eu) return false;
   let id = existente?.id;
   if (id) {
-    const { error } = await b.from('listas').update({ pessoa_tmdb_id: p.id, ranqueada: true }).eq('id', id);
+    const { error } = await b.from('listas').update({ pessoa_tmdb_id: p.id, ranqueada: true }).eq('id', id).eq('user_id', eu); // só a sua lista
     if (error) return false;
   } else {
     // duas pessoas com o mesmo nome (o ator e o diretor Steve McQueen) não podem dividir a mesma lista
@@ -91,7 +91,9 @@ export async function salvar(p, itens, existente) {
 }
 
 export async function apagar(lista) {
-  const { error } = await nuvem.banco().from('listas').delete().eq('id', lista.id);
+  const eu = nuvem.usuario()?.id;
+  if (!eu) return false;
+  const { error } = await nuvem.banco().from('listas').delete().eq('id', lista.id).eq('user_id', eu); // só a sua lista
   esquecer();
   return !error;
 }
