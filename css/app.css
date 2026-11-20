@@ -210,7 +210,7 @@ h2 small{font-size:13px;letter-spacing:0;color:var(--muted);font-weight:400;text
 .notas-mais b{color:var(--fg);font-weight:600}
 .actions{display:flex;flex-wrap:wrap;gap:8px}
 /* ações: botões redondos, sem caixa em volta */
-.acts{display:grid;grid-template-columns:repeat(3,1fr)}
+.acts{display:grid;grid-template-columns:repeat(4,1fr)}
 .act{display:flex;flex-direction:column;align-items:center;gap:6px;font-size:12.5px;font-weight:500;color:var(--muted)}
 .act svg{width:54px;height:54px;padding:15px;border-radius:50%;background:var(--raised);color:var(--fg);fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;transition:transform .12s,background .15s}
 .act:active svg{transform:scale(.9)}
@@ -219,6 +219,7 @@ h2 small{font-size:13px;letter-spacing:0;color:var(--muted);font-weight:400;text
 .act.on.seen svg{background:var(--seen)}
 .act.on.like svg{background:var(--like);fill:currentColor}
 .act.on.list svg{background:var(--list)}
+.act.on.star svg{background:var(--star);fill:currentColor}
 /* nota de 0 a 10: régua de arrastar */
 .rate{display:flex;flex-direction:column}
 .rate-t{display:flex;justify-content:space-between;align-items:baseline;font-size:20px;font-weight:700;letter-spacing:-.01em}
