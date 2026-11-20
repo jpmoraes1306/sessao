@@ -1,0 +1,187 @@
+// O que é do OUTRO (só leitura) e o que é dos dois: nota e review dele, lista dele,
+// "Queremos ver juntos", feed de atividade e compatibilidade.
+import * as nuvem from './nuvem.js';
+import * as dados from './dados.js';
+
+let dele = new Map();        // "filme:123" -> { visto, nota, curtido, seguindo, temReview, em }
+let queroDele = new Map();   // "filme:123" -> data em que ele adicionou
+let juntos = new Map();      // "filme:123" -> { por, em }
+let sessoes = [];           // sessões "juntos" planejadas ou vistas (não canceladas)
+let carregado = false;
+const ouvintes = new Set();
+export const aoCarregar = (fn) => { ouvintes.add(fn); return () => ouvintes.delete(fn); };
+export const pronto = () => carregado;
+
+const k = (tipo, id) => `${tipo}:${id}`;
+
+async function lerTudo(consulta) {
+  const linhas = [];
+  for (let i = 0; ; i += 1000) {
+    const { data, error } = await consulta().range(i, i + 999);
+    if (error) throw error;
+    linhas.push(...data);
+    if (data.length < 1000) return linhas;
+  }
+}
+
+/** Carrega o que é do outro e a lista "juntos". Chamado no login e depois de um import. */
+export async function carregar() {
+  const b = nuvem.usuario() ? nuvem.banco() : null;
+  if (!b) { dele = new Map(); queroDele = new Map(); juntos = new Map(); sessoes = []; carregado = false; return; }
+  const o = nuvem.outro();
+  try {
+    const [av, quero, jun, ses] = await Promise.all([
+      o ? lerTudo(() => b.from('avaliacoes').select('tipo, tmdb_id, visto, nota, curtido, seguindo, review_em, atualizado_em').eq('user_id', o.id).order('tmdb_id')) : [],
+      o ? lerTudo(() => b.from('quero_ver').select('tipo, tmdb_id, adicionado_em').eq('user_id', o.id).eq('juntos', false).order('tmdb_id')) : [],
+      lerTudo(() => b.from('quero_ver').select('tipo, tmdb_id, user_id, adicionado_em').eq('juntos', true).order('tmdb_id')),
+      lerTudo(() => b.from('sessoes_juntos').select('id, tipo, tmdb_id, data, situacao, criado_por, visto_por').neq('situacao', 'cancelada').order('data')),
+    ]);
+    sessoes = ses;
+    dele = new Map(av.map((a) => [k(a.tipo, a.tmdb_id), { visto: a.visto, nota: a.nota == null ? null : Number(a.nota), curtido: a.curtido, seguindo: a.seguindo, temReview: Boolean(a.review_em), em: a.atualizado_em }]));
+    queroDele = new Map(quero.map((q) => [k(q.tipo, q.tmdb_id), q.adicionado_em]));
+    juntos = new Map(jun.map((j) => [k(j.tipo, j.tmdb_id), { por: j.user_id, em: j.adicionado_em }]));
+    carregado = true;
+  } catch (erro) {
+    console.warn('Não deu para carregar os dados do outro:', erro?.message || erro);
+  }
+  ouvintes.forEach((fn) => fn());
+}
+
+/** O que o outro fez com este título: { visto, nota, curtido, seguindo, temReview, quer } ou null. */
+export function doOutro(tipo, id) {
+  const a = dele.get(k(tipo, id));
+  const quer = queroDele.has(k(tipo, id));
+  return a || quer ? { ...(a || {}), quer } : null;
+}
+export const todosDoOutro = () => [...dele.entries()].map(([chave, v]) => { const [tipo, id] = chave.split(':'); return { tipo, id: Number(id), ...v }; });
+export const queroDoOutro = () => [...queroDele.entries()].map(([chave, em]) => { const [tipo, id] = chave.split(':'); return { tipo, tmdb_id: Number(id), em }; });
+
+/* ---------- queremos ver juntos ---------- */
+export const estaEmJuntos = (tipo, id) => juntos.has(k(tipo, id));
+export const listaJuntos = () => [...juntos.entries()].map(([chave, v]) => { const [tipo, id] = chave.split(':'); return { tipo, tmdb_id: Number(id), em: v.em, por: v.por }; });
+
+export async function marcarJuntos(meta, sim) {
+  const b = nuvem.banco();
+  const eu = nuvem.usuario()?.id;
+  if (!b || !eu) return false;
+  const chave = k(meta.tipo, meta.id);
+  if (sim) {
+    juntos.set(chave, { por: eu, em: new Date().toISOString() });
+    await dados.garantirResumo(meta);
+    const { error } = await b.from('quero_ver').upsert({ user_id: eu, tipo: meta.tipo, tmdb_id: meta.id, juntos: true });
+    if (error) { juntos.delete(chave); return false; }
+  } else {
+    juntos.delete(chave);
+    await b.from('quero_ver').delete().match({ tipo: meta.tipo, tmdb_id: meta.id, juntos: true });
+  }
+  return true;
+}
+
+/* ---------- sessões juntos (regra da terça) ---------- */
+const hojeISO = () => new Date().toLocaleDateString('sv-SE');
+/** Sessões marcadas (não canceladas). Cada uma: { id, tipo, tmdb_id, data, situacao, criado_por, visto_por }. */
+export const sessoesJuntos = () => sessoes;
+/** A sessão em aberto deste título (planejada, ou vista por um e ainda sem a confirmação do outro). */
+export function sessaoDe(tipo, id) {
+  const eu = nuvem.usuario()?.id;
+  return sessoes.find((x) => x.tipo === tipo && x.tmdb_id === id && (x.situacao === 'planejada' || !(x.visto_por || []).includes(eu))) || null;
+}
+/** O que cada sessão pede de você agora: 'futura', 'hoje-ou-passou' (dá para marcar "vimos") ou 'confirmar' (o outro já marcou). */
+export function estadoDaSessao(x) {
+  const eu = nuvem.usuario()?.id;
+  if (x.situacao === 'vista') return (x.visto_por || []).includes(eu) ? 'feita' : 'confirmar';
+  return x.data > hojeISO() ? 'futura' : 'hoje-ou-passou';
+}
+
+export async function marcarSessao(meta, data) {
+  const b = nuvem.banco();
+  if (!b) return false;
+  await dados.garantirResumo(meta);
+  const { data: linha, error } = await b.from('sessoes_juntos').insert({ tipo: meta.tipo, tmdb_id: meta.id, data }).select().single();
+  if (error) return false;
+  sessoes = [...sessoes, linha].sort((x, y) => x.data.localeCompare(y.data));
+  return true;
+}
+
+export async function cancelarSessao(id) {
+  const { error } = await nuvem.banco().from('sessoes_juntos').update({ situacao: 'cancelada' }).eq('id', id);
+  if (!error) sessoes = sessoes.filter((x) => x.id !== id);
+  return !error;
+}
+
+/** "Vimos juntos": entra no seu diário na data da sessão; o outro só confirma com um toque. */
+export async function vimosJuntos(x, meta) {
+  const eu = nuvem.usuario()?.id;
+  const vistoPor = [...new Set([...(x.visto_por || []), eu])];
+  const { error } = await nuvem.banco().from('sessoes_juntos').update({ situacao: 'vista', visto_por: vistoPor }).eq('id', x.id);
+  if (error) return false;
+  x.situacao = 'vista';
+  x.visto_por = vistoPor;
+  return dados.registrarSessao(meta, x.data > hojeISO() ? hojeISO() : x.data, false, x.id);
+}
+
+/* ---------- reviews ---------- */
+/** Reviews de vocês dois para um título: [{ user_id, nome, eu, nota, review, spoiler, review_em, curtidaPorMim }] */
+export async function reviews(tipo, id) {
+  const b = nuvem.usuario() ? nuvem.banco() : null;
+  if (!b) return [];
+  const eu = nuvem.usuario().id;
+  const [{ data: linhas }, { data: curtidas }] = await Promise.all([
+    b.from('avaliacoes').select('user_id, nota, review, spoiler, review_em').eq('tipo', tipo).eq('tmdb_id', id).not('review', 'is', null),
+    b.from('curtidas_review').select('user_id, autor_id').eq('tipo', tipo).eq('tmdb_id', id),
+  ]);
+  return (linhas || []).filter((l) => (l.review || '').trim()).map((l) => ({
+    ...l, nota: l.nota == null ? null : Number(l.nota), eu: l.user_id === eu, nome: nuvem.pessoa(l.user_id)?.nome || '',
+    curtidaPorMim: (curtidas || []).some((c) => c.user_id === eu && c.autor_id === l.user_id),
+    curtidaPeloOutro: (curtidas || []).some((c) => c.user_id !== eu && c.autor_id === l.user_id),
+  }));
+}
+
+export async function curtirReview(tipo, id, autor, sim) {
+  const b = nuvem.banco();
+  const eu = nuvem.usuario()?.id;
+  if (!b || !eu) return;
+  if (sim) await b.from('curtidas_review').upsert({ user_id: eu, autor_id: autor, tipo, tmdb_id: id });
+  else await b.from('curtidas_review').delete().match({ user_id: eu, autor_id: autor, tipo, tmdb_id: id });
+}
+
+/* ---------- compatibilidade ---------- */
+/** Compara as notas nos títulos que os dois avaliaram. null se ainda não há base. */
+export function compatibilidade() {
+  const pares = [];
+  for (const t of dados.todos()) {
+    const o = dele.get(k(t.tipo, t.id));
+    if (t.nota != null && o?.nota != null) pares.push({ tipo: t.tipo, id: t.id, titulo: t.titulo, ano: t.ano, poster: t.poster, minha: t.nota, dele: o.nota, dif: Math.abs(t.nota - o.nota) });
+  }
+  if (pares.length < 5) return null;
+  const media = pares.reduce((s, p) => s + p.dif, 0) / pares.length;
+  const vistosEmComum = dados.todos().filter((t) => t.visto && dele.get(k(t.tipo, t.id))?.visto).length;
+  return {
+    porcento: Math.round(Math.max(0, 100 - media * 12.5)), // diferença média de 0 ponto = 100%; de 8 pontos = 0%
+    comparados: pares.length, vistosEmComum, diferencaMedia: media,
+    iguais: pares.filter((p) => p.dif === 0).length,
+    concordam: pares.filter((p) => p.dif === 0).sort((a, b) => b.minha - a.minha).slice(0, 6),
+    discordam: [...pares].sort((a, b) => b.dif - a.dif).slice(0, 6),
+  };
+}
+
+/* ---------- feed ---------- */
+/** Últimas atividades dos dois (nota, visto, review), da mais nova para a mais antiga. */
+export async function feed(limite = 14) {
+  const b = nuvem.usuario() ? nuvem.banco() : null;
+  if (!b) return [];
+  const { data, error } = await b.from('avaliacoes').select('user_id, tipo, tmdb_id, visto, nota, curtido, seguindo, review_em, atualizado_em').order('atualizado_em', { ascending: false }).limit(limite);
+  if (error) return [];
+  const info = await dados.resumos(data);
+  return data.map((a) => {
+    const r = info.get(k(a.tipo, a.tmdb_id)) || {};
+    return { ...a, nota: a.nota == null ? null : Number(a.nota), eu: a.user_id === nuvem.usuario().id, nome: nuvem.pessoa(a.user_id)?.nome || '', titulo: r.titulo || 'Sem título', ano: r.ano, poster: r.poster || '' };
+  });
+}
+
+// carrega quando alguém entra e sempre que os dados da pessoa são sincronizados (login, import)
+let quem = null;
+nuvem.aoMudar(() => {
+  const id = nuvem.usuario()?.id || null;
+  if (id !== quem) { quem = id; carregar(); }
+});
