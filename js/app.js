@@ -18,6 +18,7 @@ import * as reviews from './telas/reviews.js';
 import * as ranking from './telas/ranking.js';
 import * as editar from './telas/editar.js';
 import * as frame from './telas/frame.js';
+import * as estrelas from './telas/estrelas.js';
 import * as dados from './dados.js';
 import * as social from './social.js';
 import { simboloEscondido, esconderijoDeHoje } from './ovo.js';
@@ -25,7 +26,7 @@ import * as nuvem from './nuvem.js';
 
 const ABAS = { inicio, buscar, lista, diario, perfil };
 const NOMES = { inicio: 'Início', buscar: 'Buscar', lista: 'Quero ver', diario: 'Diário', perfil: 'Perfil' };
-const FICHAS = { filme, serie, pessoa, importar, calendario, reviews, ranking, editar, frame };
+const FICHAS = { filme, serie, pessoa, importar, calendario, reviews, ranking, editar, frame, estrelas };
 
 const view = $('#view');
 const sheet = $('#sheet');

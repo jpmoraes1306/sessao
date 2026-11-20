@@ -103,7 +103,10 @@ export async function comentarReview(tipo, id, autor, texto) {
   const limpo = (texto || '').trim().slice(0, 1000);
   if (!b || !eu || !limpo) return null;
   const { data, error } = await b.from('comentarios_review').insert({ user_id: eu, autor_id: autor, tipo, tmdb_id: id, texto: limpo }).select('id, user_id, autor_id, texto, criado_em').single();
-  return error || !data ? null : comentarioDe(data);
+  if (error || !data) return null;
+  // o aviso no celular do outro sai pela função do servidor; se falhar, o comentário continua gravado
+  b.functions.invoke('avisos', { body: { acao: 'comentou', tipo, tmdb_id: id } }).catch(() => {});
+  return comentarioDe(data);
 }
 /** Apaga um comentário seu. */
 export async function apagarComentario(idComentario) {

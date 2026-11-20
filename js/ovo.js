@@ -181,7 +181,7 @@ export async function abrirOvo() {
         return `<a href="#/pessoa/${p.id}"><div class="cena" data-foto="${arquivo}" data-pessoa="${p.id}"></div><span><b>${esc(p.nome)}</b><i data-filme></i></span></a>`;
       }).join('')}</div>
       ${placar ? htmlPlacar(placar, 'Quem achou primeiro, placar') : ''}
-      ${eu && o ? '<a class="btn on-star" href="#/frame/hoje">Jogar o frame desta rodada</a>' : ''}
+      ${eu && o ? '<div class="actions" style="justify-content:center"><a class="btn small on-star" href="#/frame/hoje">Jogar o frame</a><a class="btn small on-list" href="#/estrelas/hoje">Connect the Stars</a></div>' : ''}
       <p class="ovo-a">Tudo troca ${proximaTroca()}: o próximo símbolo é <span class="ovo-m">${amanha.svg}</span> <b>${esc(amanha.nome)}</b>.</p>
       <button class="btn small" data-fechar style="align-self:center">Fechar</button></div>`;
   };

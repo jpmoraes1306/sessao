@@ -354,6 +354,23 @@ export async function pessoa(id) {
   };
 }
 
+/* ---------- Connect the Stars ---------- */
+/** Filmes em que a pessoa atuou (longas com um mínimo de votos, sem documentário), dos mais conhecidos para os
+    menos: [{ id, titulo, ano, poster, votos }]. */
+export async function filmesComoAtor(id) {
+  const d = await api(`person/${id}/movie_credits`, { language: 'en-US' }, { ttl: 7 * DIA });
+  const vistos = new Set();
+  return (d.cast || [])
+    .filter((x) => x.vote_count >= 150 && !x.adult && x.title && !NAO_E_PAPEL.test(x.character || '') && !(x.genre_ids || []).includes(99) && !vistos.has(x.id) && vistos.add(x.id))
+    .sort((a, b) => b.vote_count - a.vote_count)
+    .map((x) => ({ id: x.id, titulo: x.title, ano: x.release_date ? Number(x.release_date.slice(0, 4)) : null, poster: x.poster_path || '', votos: x.vote_count }));
+}
+/** Elenco principal de um filme (até 20 nomes, na ordem dos créditos): [{ id, nome, foto }]. */
+export async function elencoDoFilme(id) {
+  const d = await api(`movie/${id}/credits`, { language: 'en-US' }, { ttl: 30 * DIA });
+  return (d.cast || []).filter((c) => !NAO_E_PAPEL.test(c.character || '')).slice(0, 20).map((c) => ({ id: c.id, nome: c.name, foto: c.profile_path || '' }));
+}
+
 /* ---------- vitrines do início ---------- */
 const hoje = () => new Date().toLocaleDateString('sv-SE'); // AAAA-MM-DD no fuso do aparelho
 
