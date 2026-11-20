@@ -9,6 +9,7 @@ import * as social from '../social.js';
 import * as andamento from '../andamento.js';
 import * as avisos from '../avisos.js';
 import { semChaves } from './comum.js';
+import { verPerfilDe } from './perfil.js';
 import { simboloEscondido } from '../ovo.js';
 import { $, esc, nota, notaMinha, tile, poster, link, dataCurta, contagem, proximaTerca, duracao, hoje, toast, corDe, IC } from '../ui.js';
 
@@ -126,21 +127,24 @@ export function atualizar(el) {
 
 /* ---------- atividade do outro (as suas ficam no seu Diário) ---------- */
 function tileFeed(a, o) {
-  const fez = a.comentou ? 'comentou' : a.nota != null ? `deu <span class="selo">${notaMinha(a.nota)}</span>` : a.visto ? 'viu' : a.seguindo ? 'acompanha' : a.curtido ? 'curtiu' : 'marcou';
+  const fez = a.nota != null ? `deu <span class="selo">${notaMinha(a.nota)}</span>` : a.revisto ? 'viu de novo' : 'viu';
   // a miniatura é a foto de perfil do outro; sem foto, a inicial
   const mini = o?.foto ? `<img class="av" src="${esc(o.foto)}" alt="" referrerpolicy="no-referrer" onerror="this.replaceWith(Object.assign(document.createElement('i'),{className:'av ele',textContent:this.dataset.l}))" data-l="${esc((a.nome || '?')[0])}">` : `<i class="av ele">${esc((a.nome || '?')[0])}</i>`;
   return `<a class="tile" href="#/${a.tipo}/${a.tmdb_id}" aria-label="${esc(a.nome)}: ${esc(a.titulo)}">${poster(a)}
-    <span class="leg">${mini}<span class="n">${fez}</span>${a.curtido && a.nota != null ? '<span class="heart" aria-label="curtiu">♥</span>' : ''}</span></a>`;
+    <span class="leg">${mini}<span class="n">${fez}</span>${a.curtido ? '<span class="heart" aria-label="curtiu">♥</span>' : ''}</span></a>`;
 }
+const DIAS_DE_ATIVIDADE = 7; // a fileira mostra só os filmes que o outro viu nesse período; o resto está no perfil dele
 
 async function atividade(el) {
   const s = $('#atividade', el);
   const o = nuvem.usuario() && nuvem.outro();
   if (!s || !o) return;
-  const itens = await social.feed(12);
-  if (!$('#atividade', el) || !itens.length) return;
+  const itens = await social.feed(DIAS_DE_ATIVIDADE);
+  if (!$('#atividade', el)) return;
   s.hidden = false;
-  s.innerHTML = `<h2>Atividade <small>de ${esc(o.nome)}</small></h2><div class="row">${itens.map((a) => tileFeed(a, o)).join('')}</div>`;
+  s.innerHTML = `<h2>Atividade <small><button class="link" data-acao="perfil-dele">Perfil de ${esc(o.nome)}</button></small></h2>
+    ${itens.length ? `<div class="row">${itens.map((a) => tileFeed(a, o)).join('')}</div><p class="note">Filmes que ${esc(o.nome)} viu nos últimos ${DIAS_DE_ATIVIDADE} dias.</p>`
+    : `<p class="note">${esc(o.nome)} não registrou nenhum filme nos últimos ${DIAS_DE_ATIVIDADE} dias. O resto está no perfil.</p>`}`;
   atalhos(el);
 }
 
@@ -213,6 +217,10 @@ export function render(el) {
       dados.marcarEpisodios(b.dataset.serie, [{ t: Number(b.dataset.t), e: Number(b.dataset.e) }], true);
       toast(`${cod(b.dataset.t, b.dataset.e)} visto`);
       emAndamento(el).catch(() => {});
+    } else if (b.dataset.acao === 'perfil-dele') {
+      // abre o Perfil já mostrando o do outro (lá estão todos os filmes, notas e listas dele)
+      const o = nuvem.outro();
+      if (o) { verPerfilDe(o.id); location.hash = '#/perfil'; }
     } else if (b.dataset.acao === 'avisar') {
       e.preventDefault();
       b.disabled = true;

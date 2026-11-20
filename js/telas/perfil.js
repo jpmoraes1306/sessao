@@ -14,6 +14,8 @@ import { $, esc, nota, notaMinha, selo, tile, poster, toast, corDe, hoje, folha 
 
 const mascara = (k) => (k ? `${'•'.repeat(Math.max(0, k.length - 4))}${k.slice(-4)}` : '');
 let vendo = null;   // id do perfil na tela (null = o seu)
+/** Na próxima vez que o Perfil abrir, mostra o da pessoa com este id (o outro) em vez do seu. */
+export const verPerfilDe = (id) => { vendo = id || null; };
 let vez = 0;
 const fotos = new Map(); // id da pessoa no TMDB -> caminho da foto
 const K = (tipo, id) => `${tipo}:${id}`;
