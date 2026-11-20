@@ -2,7 +2,7 @@
    - Arquivos do app: rede primeiro, cache como reserva (abre sem internet e nunca fica preso em versão velha).
    - Imagens do TMDB e fontes: cache primeiro.
    - APIs (TMDB, OMDb): passam direto; o cache delas é feito pelo próprio app (IndexedDB). */
-const VERSAO = 'v16';
+const VERSAO = 'v17';
 const CACHE_APP = `sessao-app-${VERSAO}`;
 const CACHE_IMG = 'sessao-img-v1';
 const CACHE_FONTE = 'sessao-fonte-v1';
@@ -10,7 +10,7 @@ const MAX_IMG = 700;
 
 const CASCA = [
   './', 'index.html', 'manifest.webmanifest', 'css/app.css',
-  'js/app.js', 'js/config.js', 'js/cache.js', 'js/tmdb.js', 'js/omdb.js', 'js/dados.js', 'js/ui.js', 'js/wikidata.js', 'js/ovo.js', 'js/nuvem.js', 'js/supabase-config.js', 'js/letterboxd.js', 'js/importar.js', 'js/telas/importar.js', 'js/social.js', 'js/telas/comum.js', 'js/mix.js', 'js/streaming.js', 'js/andamento.js', 'js/especial.js', 'js/telas/calendario.js', 'js/curiosidades.js', 'js/avisos.js',
+  'js/app.js', 'js/config.js', 'js/cache.js', 'js/tmdb.js', 'js/omdb.js', 'js/dados.js', 'js/ui.js', 'js/wikidata.js', 'js/ovo.js', 'js/nuvem.js', 'js/supabase-config.js', 'js/letterboxd.js', 'js/importar.js', 'js/telas/importar.js', 'js/social.js', 'js/telas/comum.js', 'js/mix.js', 'js/streaming.js', 'js/andamento.js', 'js/notasfora.js', 'js/telas/calendario.js', 'js/curiosidades.js', 'js/avisos.js',
   'js/telas/inicio.js', 'js/telas/buscar.js', 'js/telas/lista.js', 'js/telas/diario.js', 'js/telas/perfil.js',
   'js/telas/filme.js', 'js/telas/serie.js', 'js/telas/pessoa.js',
   'icones/icon-192.png', 'icones/icon-512.png',
