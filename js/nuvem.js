@@ -126,5 +126,6 @@ export async function salvarFoto(dataUrl) {
 }
 
 export async function sair() {
-  if (cliente) await cliente.auth.signOut();
+  // só neste aparelho: o padrão do Supabase encerra a sessão em todos (sair no celular derrubava o computador)
+  if (cliente) await cliente.auth.signOut({ scope: 'local' });
 }
