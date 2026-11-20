@@ -19,6 +19,10 @@ export const rodada = () => hoje() + (horaDeBrasilia() >= 12 ? 'b' : '');
 export const numeroDaRodada = (chave = rodada()) => Math.floor(Date.parse(`${chave.slice(0, 10)}T12:00:00Z`) / 864e5) * 2 + (chave.length > 10 ? 1 : 0);
 /** Quando a rodada troca: "ao meio-dia" ou "à meia-noite". */
 export const proximaTroca = () => (horaDeBrasilia() >= 12 ? 'à meia-noite' : 'ao meio-dia');
+/** O jogo do dia: os dois jogos se revezam, um dia cada ("estrelas" = ligar dois atores no mapa; "frame" = adivinhar o
+    quadro). Vale o dia de Brasília; as duas rodadas do mesmo dia são do mesmo jogo. */
+export const jogoDoDia = () => (Math.floor(Date.parse(`${hoje()}T12:00:00Z`) / 864e5) % 2 ? 'estrelas' : 'frame');
+export const NOME_DO_JOGO = { estrelas: 'Seis graus', frame: 'Frame do dia' };
 export const dataBR = (iso) => (iso ? iso.slice(0, 10).split('-').reverse().join('/') : '');
 const meioDia = (iso) => new Date(`${iso.slice(0, 10)}T12:00:00`);
 /** "sex, 22/11" (com o ano quando não é o ano atual). */

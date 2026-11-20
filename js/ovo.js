@@ -6,7 +6,7 @@
 // - Símbolo e esconderijo dependem só da rodada, então são os mesmos nos dois celulares.
 import { img } from './tmdb.js';
 import * as nuvem from './nuvem.js';
-import { esc, hoje, rodada, numeroDaRodada, proximaTroca, toast } from './ui.js';
+import { esc, hoje, rodada, numeroDaRodada, proximaTroca, jogoDoDia, NOME_DO_JOGO, toast } from './ui.js';
 
 const CAGE = { id: 2963, nome: 'Nicolas Cage', rosto: '/y1RtezurZYveYkVNRht7CwEgSYY.jpg' };
 const DAFOE = { id: 5293, nome: 'Willem Dafoe', rosto: '/ui8e4sgZAwMPi3hzEO53jyBJF9B.jpg' };
@@ -70,7 +70,7 @@ const semRepetir = (n, total, sal = 0) => { const a = sorteio(n, total, sal); re
 /** Os nomes dizem "de hoje", mas valem para a rodada atual (ver `rodada` em ui.js). */
 export const esconderijoDeHoje = () => NOMES[semRepetir(numeroDaRodada(), NOMES.length)];
 export const dicaDeHoje = () => LUGARES[esconderijoDeHoje()];
-export { proximaTroca };
+export { proximaTroca, jogoDoDia, NOME_DO_JOGO };
 const simboloDa = (n) => SIMBOLOS[semRepetir(n, SIMBOLOS.length, 7)];
 /** O símbolo escondido agora (ou daqui a `mais` rodadas): { nome, svg }. */
 export const simboloDeHoje = (mais = 0) => { const s = simboloDa(numeroDaRodada() + mais); return { nome: s[0], svg: desenho(s) }; };
@@ -181,7 +181,7 @@ export async function abrirOvo() {
         return `<a href="#/pessoa/${p.id}"><div class="cena" data-foto="${arquivo}" data-pessoa="${p.id}"></div><span><b>${esc(p.nome)}</b><i data-filme></i></span></a>`;
       }).join('')}</div>
       ${placar ? htmlPlacar(placar, 'Quem achou primeiro, placar') : ''}
-      ${eu && o ? '<div class="actions" style="justify-content:center"><a class="btn small on-star" href="#/frame/hoje">Jogar o frame</a><a class="btn small on-list" href="#/estrelas/hoje">Connect the Stars</a></div>' : ''}
+      ${eu && o ? `<a class="btn on-star" href="#/${jogoDoDia()}/hoje">Jogar o jogo de hoje: ${NOME_DO_JOGO[jogoDoDia()]}</a>` : ''}
       <p class="ovo-a">Tudo troca ${proximaTroca()}: o próximo símbolo é <span class="ovo-m">${amanha.svg}</span> <b>${esc(amanha.nome)}</b>.</p>
       <button class="btn small" data-fechar style="align-self:center">Fechar</button></div>`;
   };

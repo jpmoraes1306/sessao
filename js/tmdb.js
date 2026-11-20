@@ -371,6 +371,38 @@ export async function elencoDoFilme(id) {
   return (d.cast || []).filter((c) => !NAO_E_PAPEL.test(c.character || '')).slice(0, 20).map((c) => ({ id: c.id, nome: c.name, foto: c.profile_path || '' }));
 }
 
+const SEM_ELENCO_FIXO = new Set([10767, 10763, 10764]); // talk show, noticiário e reality: todo mundo "aparece"
+/** Filmes e séries em que a pessoa atuou, dos mais conhecidos para os menos: [{ tipo, id, titulo, ano, poster, votos }]. */
+export async function titulosComoAtor(id) {
+  const d = await api(`person/${id}/combined_credits`, { language: 'en-US' }, { ttl: 7 * DIA });
+  const vistos = new Set();
+  return (d.cast || [])
+    .filter((x) => (x.media_type === 'movie' || x.media_type === 'tv') && !x.adult && !NAO_E_PAPEL.test(x.character || '')
+      && !(x.genre_ids || []).some((g) => g === 99 || SEM_ELENCO_FIXO.has(g))
+      && (x.media_type === 'movie' ? x.vote_count >= 150 : x.vote_count >= 80 && (x.episode_count || 0) >= 2))
+    .map((x) => cartao(x))
+    .filter((c) => c.titulo && !vistos.has(`${c.tipo}:${c.id}`) && vistos.add(`${c.tipo}:${c.id}`))
+    .sort((a, b) => b.votos - a.votos)
+    .map((c) => ({ tipo: c.tipo, id: c.id, titulo: c.titulo, ano: c.ano, poster: c.poster, votos: c.votos }));
+}
+/** Elenco INTEIRO de um filme ou de uma série (para conferir se um ator está nele), na ordem dos créditos: [{ id, nome, foto }]. */
+export async function elencoCompleto(tipo, id) {
+  if (tipo === 'serie') {
+    const d = await api(`tv/${id}/aggregate_credits`, { language: 'en-US' }, { ttl: 30 * DIA });
+    return (d.cast || []).map((c) => ({ id: c.id, nome: c.name, foto: c.profile_path || '' }));
+  }
+  const d = await api(`movie/${id}/credits`, { language: 'en-US' }, { ttl: 30 * DIA });
+  return (d.cast || []).filter((c) => !NAO_E_PAPEL.test(c.character || '')).map((c) => ({ id: c.id, nome: c.name, foto: c.profile_path || '' }));
+}
+/** Quadros de verdade de uma série, tirados dos trailers e clipes oficiais (igual a quadrosDoFilme). */
+export async function quadrosDaSerie(id) {
+  const d = await api(`tv/${id}/videos`, { language: 'en-US' }, { ttl: 30 * DIA });
+  const ORDEM = { Clip: 0, Trailer: 1, Teaser: 2 };
+  const videos = (d.results || []).filter((v) => v.site === 'YouTube' && v.type in ORDEM && /^[\w-]{6,20}$/.test(v.key || ''))
+    .sort((a, b) => ORDEM[a.type] - ORDEM[b.type] || Number(b.official) - Number(a.official));
+  return videos.slice(0, 6).flatMap((v) => [2, 1, 3].map((n) => `https://i.ytimg.com/vi/${v.key}/maxres${n}.jpg`));
+}
+
 /* ---------- vitrines do início ---------- */
 const hoje = () => new Date().toLocaleDateString('sv-SE'); // AAAA-MM-DD no fuso do aparelho
 
