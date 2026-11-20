@@ -1,10 +1,10 @@
 // Pedaços que a ficha do filme e a página da série têm em comum na fase 3:
-// a nota do outro, "Queremos ver juntos", favorito e as reviews de vocês dois.
+// a nota do outro, "Queremos ver juntos", a estrela de favorito e as reviews de vocês dois.
 import * as nuvem from '../nuvem.js';
 import * as dados from '../dados.js';
 import * as social from '../social.js';
 import * as curiosidades from '../curiosidades.js';
-import { $, esc, nota, notaMinha, dataBR, toast, corDe, hoje, IC } from '../ui.js';
+import { $, esc, nota, notaMinha, dataBR, toast, perguntar, corDe, hoje, IC } from '../ui.js';
 
 const avatar = (p) => {
   const [a, b] = corDe(p.nome);
@@ -27,18 +27,18 @@ function linhaDoOutro(tipo, id) {
   return `<div class="lin">${avatar(o)}<span class="n">${esc(o.nome)}</span><span class="det">${frase}${media}</span></div>`;
 }
 
-/**
- * Grupo "vocês dois" da ficha (só com login): a nota do outro, a chave "Queremos ver juntos"
- * e a chave de favorito.
- */
+/** Grupo "vocês dois" da ficha (só com login): a nota do outro e a chave "Queremos ver juntos". */
 export function grupoSocial(meta) {
   if (!nuvem.usuario()) return '';
   const j = social.estaEmJuntos(meta.tipo, meta.id);
-  const f = dados.ehFavorito(meta.tipo, meta.id);
   return `<div class="grupo">${linhaDoOutro(meta.tipo, meta.id)}
     <button class="lin" data-acao="juntos" role="switch" aria-checked="${j}"><span class="n">Queremos ver juntos<small>Entra na lista Juntos, do Quero ver</small></span><span class="chave${j ? ' on' : ''}"></span></button>
-    <button class="lin" data-acao="favorito" role="switch" aria-checked="${f}"><span class="n">Nos meus favoritos<small>Até 4, aparecem no seu perfil</small></span><span class="chave${f ? ' on' : ''}"></span></button>
   </div>`;
+}
+/** Botão de estrela da ficha, ao lado de Curtir e Quero ver: põe ou tira dos 4 favoritos do perfil. */
+export function botaoFavorito(meta) {
+  const f = dados.ehFavorito(meta.tipo, meta.id);
+  return `<button class="act star ${f ? 'on' : ''}" data-acao="favorito" aria-pressed="${f}">${IC.estrela}${f ? 'Favorito' : 'Favoritar'}</button>`;
 }
 /** Botão "Vi de novo" (só com login e para o que a pessoa já viu): registra a sessão de hoje no diário como revista. */
 export function botaoRever(m) {
@@ -65,7 +65,10 @@ export async function tocarExtra(acao, meta, botao) {
   if (acao === 'favorito') {
     const era = dados.ehFavorito(meta.tipo, meta.id);
     const ok = dados.alternarFavorito(meta);
-    toast(!ok ? 'Você já tem 4 favoritos. Tire um antes.' : era ? 'Saiu dos favoritos' : 'Entrou nos seus favoritos');
+    if (ok) { toast(era ? 'Saiu dos favoritos' : 'Entrou nos seus favoritos. Aparece no seu perfil.'); return true; }
+    // já são 4: a pessoa escolhe qual sai, na tela de favoritos
+    const trocar = await perguntar({ titulo: 'Você já tem 4 favoritos', texto: `Para pôr ${meta.titulo}, tire um dos quatro.`, sim: 'Escolher qual sai', nao: 'Deixar como está' });
+    if (trocar) location.hash = '#/editar/favoritos';
     return true;
   }
   return false;

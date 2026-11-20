@@ -5,7 +5,7 @@ import * as wikidata from '../wikidata.js';
 import * as dados from '../dados.js';
 import * as nuvem from '../nuvem.js';
 import * as avisos from '../avisos.js';
-import { grupoSocial, botaoRever, tocarExtra, montarReviews, montarCuriosidades } from './comum.js';
+import { grupoSocial, botaoRever, botaoFavorito, tocarExtra, montarReviews, montarCuriosidades } from './comum.js';
 import { simboloEscondido } from '../ovo.js';
 import { secaoComunidade } from './reviews.js';
 import { $, esc, nota, notaMinha, selo, blocoNota, ligarReguas, poster, elencoJunto, tile, linha, blocoNotas, blocoProvedores, erroFicha, toast, duracao, dataCurta, proximaTerca, dolares, hoje, corDe, IC } from '../ui.js';
@@ -72,7 +72,9 @@ export async function abrir(el, id, ctx) {
   try { f = await tmdb.filme(id); } catch (erro) { if (ctx.vivo()) el.innerHTML = erroFicha(erro); return; }
   if (!ctx.vivo()) return;
 
-  const meta = { tipo: 'filme', id: f.id, titulo: f.titulo, ano: f.ano, data: f.data, poster: f.poster, duracao: f.duracao, tmdb: f.nota, pop: f.pop, generos: f.generos };
+  // diretores e elenco entram no resumo guardado na conta: é deles que saem "atores e diretores que você mais vê" no Perfil
+  const gente = (l, n) => l.slice(0, n).map((p) => ({ id: p.id, nome: p.nome }));
+  const meta = { tipo: 'filme', id: f.id, titulo: f.titulo, ano: f.ano, data: f.data, poster: f.poster, duracao: f.duracao, tmdb: f.nota, pop: f.pop, generos: f.generos, diretores: gente(f.diretores, 3), elenco: gente(f.elenco, 8) };
   let notasFora = null;
   let carregandoNotas = Boolean(f.imdbId);
   const meu = () => dados.titulo('filme', f.id);
@@ -93,6 +95,7 @@ export async function abrir(el, id, ctx) {
       <button class="act seen ${m.visto ? 'on' : ''}" data-acao="visto">${IC.olho}${m.visto ? 'Visto' : 'Assistir'}</button>
       <button class="act like ${m.curtido ? 'on' : ''}" data-acao="curtir">${IC.coracao}${m.curtido ? 'Curtido' : 'Curtir'}</button>
       <button class="act list ${m.quero ? 'on' : ''}" data-acao="quero">${IC.relogio}${m.quero ? 'Na lista' : 'Quero ver'}</button>
+      ${botaoFavorito(meta)}
     </div>
     ${blocoNota(m.nota)}
     ${botaoRever(m)}`;

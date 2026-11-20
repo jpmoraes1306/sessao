@@ -3,7 +3,7 @@ import * as tmdb from '../tmdb.js';
 import * as omdb from '../omdb.js';
 import * as dados from '../dados.js';
 import * as nuvem from '../nuvem.js';
-import { grupoSocial, botaoRever, tocarExtra, montarReviews, montarCuriosidades } from './comum.js';
+import { grupoSocial, botaoRever, botaoFavorito, tocarExtra, montarReviews, montarCuriosidades } from './comum.js';
 import { simboloEscondido } from '../ovo.js';
 import { secaoComunidade } from './reviews.js';
 import { $, esc, nota, notaMinha, selo, blocoNota, ligarReguas, poster, elencoJunto, tile, blocoNotas, blocoProvedores, erroFicha, toast, perguntar, dataCurta, contagem, hoje, corDe, IC } from '../ui.js';
@@ -17,7 +17,9 @@ export async function abrir(el, id, ctx) {
   try { s = await tmdb.serie(id); } catch (erro) { if (ctx.vivo()) el.innerHTML = erroFicha(erro); return; }
   if (!ctx.vivo()) return;
 
-  const meta = { tipo: 'serie', id: s.id, titulo: s.titulo, ano: s.ano, data: s.data, poster: s.poster, tmdb: s.nota, pop: s.pop, generos: s.generos };
+  // criadores e elenco entram no resumo guardado na conta (o Perfil conta atores e diretores a partir dele)
+  const gente = (l, n) => l.slice(0, n).map((p) => ({ id: p.id, nome: p.nome }));
+  const meta = { tipo: 'serie', id: s.id, titulo: s.titulo, ano: s.ano, data: s.data, poster: s.poster, tmdb: s.nota, pop: s.pop, generos: s.generos, diretores: gente(s.criadores, 3), elenco: gente(s.elenco, 8) };
   const carregadas = new Map();   // nº da temporada -> dados da temporada
   const abertas = new Set();      // temporadas expandidas
   let epAberto = '';              // "2x3" com sinopse e nota à mostra
@@ -94,6 +96,7 @@ export async function abrir(el, id, ctx) {
       <button class="act seen ${m.seguindo ? 'on' : ''}" data-acao="seguir">${IC.sino}${m.seguindo ? 'Acompanhando' : 'Acompanhar'}</button>
       <button class="act like ${m.curtido ? 'on' : ''}" data-acao="curtir">${IC.coracao}${m.curtido ? 'Curtida' : 'Curtir'}</button>
       <button class="act list ${m.quero ? 'on' : ''}" data-acao="quero">${IC.relogio}${m.quero ? 'Na lista' : 'Quero ver'}</button>
+      ${botaoFavorito(meta)}
     </div>
     ${blocoNota(m.nota, 'Sua nota', 'data-alvo="serie"')}
     ${botaoRever(m)}`;

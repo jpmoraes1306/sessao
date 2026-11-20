@@ -29,6 +29,18 @@ const contaComoVisto = (t) => Boolean(t.visto || (t.tipo === 'serie' && (t.segui
 /** O Perfil ainda é a aba na tela? (depois de esperar a internet, a pessoa pode ter ido para outra) */
 const naTela = (el) => el.dataset.aba === 'perfil';
 
+/** Títulos vistos cujo resumo na conta está sem elenco e direção (marcados antes de o app guardar isso, ou com a
+    internet ruim) não entram em "atores e diretores que você mais vê". Completa aos poucos, sem segurar a tela:
+    na próxima visita ao Perfil eles já contam. */
+const tentados = new Set(); // um título que o TMDB não devolve não é pedido de novo a cada visita
+function completarResumos(vistos, info) {
+  const incompletos = vistos.filter((t) => !tentados.has(K(t.tipo, t.id)) && !Array.isArray(info.get(K(t.tipo, t.id))?.elenco)).slice(0, 12);
+  for (const t of incompletos) {
+    tentados.add(K(t.tipo, t.id));
+    tmdb.resumo(t.tipo, t.id).then((r) => dados.guardarResumo(t.tipo, t.id, r, true)).catch(() => {});
+  }
+}
+
 /** Junta o que é preciso para desenhar o perfil de uma pessoa. */
 async function carregar(pid, ehMeu) {
   const b = nuvem.banco();
@@ -42,6 +54,7 @@ async function carregar(pid, ehMeu) {
   // o diário pode ter títulos que não estão entre os vistos (algo desmarcado depois): busca o resumo deles também
   const extra = await dados.resumos([...diario.filter((x) => !info.has(K(x.tipo, x.tmdb_id))), ...(ehMeu ? [] : favs)]);
   const res = (tipo, id) => info.get(K(tipo, id)) || extra.get(K(tipo, id)) || {};
+  completarResumos(vistos, info);
   return { vistos, info, diario, listas, res, favoritos: ehMeu ? favs : favs.map((f) => ({ tipo: f.tipo, id: f.tmdb_id, ...res(f.tipo, f.tmdb_id) })) };
 }
 
@@ -138,8 +151,8 @@ function corpoPerfil(pessoa, ehMeu, d, e) {
   const recentes = d.diario.slice(0, 12).map((x) => ({ tipo: x.tipo, id: x.tmdb_id, ...d.res(x.tipo, x.tmdb_id), nota: x.nota == null ? null : Number(x.nota) })).filter((x) => x.titulo);
   const par = (p) => `<a class="li" href="#/${p.tipo}/${p.id}">${poster(p, { tam: 'w154' })}<div><div class="t">${esc(p.titulo)}</div><div class="s">${p.ano || ''}</div></div><span class="r">você ${selo(p.minha)} · ${nomeDele} ${selo(p.dele)}</span></a>`;
   return `
-  ${d.favoritos.length || ehMeu ? `<section><h2>Favoritos <small>${ehMeu ? 'até 4 · escolha na ficha, em "☆ Favorito"' : ''}</small></h2>
-    ${d.favoritos.length ? `<div class="grid4">${d.favoritos.map((f) => tile(f)).join('')}</div>` : '<p class="note">Nenhum favorito ainda.</p>'}</section>` : ''}
+  ${d.favoritos.length || ehMeu ? `<section><h2>Favoritos <small>${ehMeu ? `até 4 · <a class="link" href="#/editar/favoritos">${d.favoritos.length ? 'Editar' : 'Escolher'}</a>` : ''}</small></h2>
+    ${d.favoritos.length ? `<div class="grid4">${d.favoritos.map((f) => tile(f)).join('')}</div>` : `<p class="note">Nenhum favorito ainda.${ehMeu ? ' Toque na estrela na ficha de um filme ou de uma série.' : ''}</p>`}</section>` : ''}
   ${recentes.length ? `<section><h2>Vistos recentemente</h2><div class="row">${recentes.map((t) => tile(t, t.nota != null ? `nota ${selo(t.nota)}` : '')).join('')}</div></section>` : ''}
   <section><h2>Em ${e.ano}</h2>
     <div class="stats"><div class="stat"><b>${e.noAno}</b><span>sessões no diário</span></div><div class="stat"><b>${e.horasAno}</b><span>horas</span></div><div class="stat"><b>${e.mediaAno != null ? nota(e.mediaAno) : '–'}</b><span>nota média</span></div></div>
@@ -152,7 +165,7 @@ function corpoPerfil(pessoa, ehMeu, d, e) {
   ${e.melhores.length ? `<section><h2>Diretores com a melhor média <small>mínimo de 3 filmes com nota</small></h2><div>${ranking(e.melhores)}</div></section>` : ''}
   ${e.generos.length ? `<section><h2>Gêneros</h2>${barras(e.generos, undefined, 'genero')}</section>` : ''}
   ${e.decadas.length ? `<section><h2>Décadas</h2>${barras(e.decadas.map(([dec, n]) => [`Anos ${dec}`, n, dec]), 'var(--list)', 'decada')}</section>` : ''}
-  ${d.listas.length ? `<section><h2>Listas <small>${d.listas.length}</small></h2><div class="listas">${d.listas.map((l) => `<div class="temp" data-lista="${l.id}"><button class="temp-h" data-acao="lista" data-id="${l.id}" style="grid-template-columns:1fr auto"><div><div class="t">${esc(l.nome)}</div><div class="s">${l.lista_itens?.[0]?.count ?? 0} títulos${l.ranqueada ? ' · ranking' : ''}</div></div><span class="seta">›</span></button></div>`).join('')}</div></section>` : ''}
+  ${d.listas.length || ehMeu ? `<section><h2>Listas <small>${d.listas.length || ''}${ehMeu ? `${d.listas.length ? ' · ' : ''}<a class="link" href="#/editar/lista-nova">Nova lista</a>` : ''}</small></h2>${d.listas.length ? '' : '<p class="note">Nenhuma lista ainda. Crie uma com os títulos que quiser, com ou sem ordem.</p>'}<div class="listas">${d.listas.map((l) => `<div class="temp" data-lista="${l.id}"><button class="temp-h" data-acao="lista" data-id="${l.id}" style="grid-template-columns:1fr auto"><div><div class="t">${esc(l.nome)}</div><div class="s">${l.lista_itens?.[0]?.count ?? 0} títulos${l.ranqueada ? ' · ranking' : ''}</div></div><span class="seta">›</span></button></div>`).join('')}</div></section>` : ''}
   ${comp ? `<section><h2>Você × ${nomeDele}</h2>
     <div class="card"><div class="entre"><span>Compatibilidade de gosto</span><b class="selo" style="font-size:26px">${comp.porcento}%</b></div><div class="lbar-big"><i style="width:${comp.porcento}%;background:var(--star)"></i></div>
       <p>${comp.vistosEmComum} títulos vistos pelos dois, ${comp.comparados} com nota dos dois. Notas iguais em ${comp.iguais}; diferença média de ${nota(comp.diferencaMedia)} ponto${comp.diferencaMedia >= 2 ? 's' : ''}.</p></div>
@@ -388,7 +401,9 @@ function ligar(el) {
         const { data } = await nuvem.banco().from('lista_itens').select('posicao, tipo, tmdb_id').eq('lista_id', b.dataset.id).order('posicao');
         const info = await dados.resumos(data || []);
         const corpo = caixa.querySelector('.temp-c');
-        if (corpo) corpo.innerHTML = (data || []).map((i) => { const r = info.get(K(i.tipo, i.tmdb_id)) || {}; const meu = dados.titulo(i.tipo, i.tmdb_id); return `<a class="li" href="#/${i.tipo}/${i.tmdb_id}" style="grid-template-columns:26px 36px 1fr auto"><span class="date" style="font-size:18px">${i.posicao}</span>${poster({ titulo: r.titulo || '', poster: r.poster }, { tam: 'w154' })}<div><div class="t">${esc(r.titulo || 'Sem título')}</div><div class="s">${r.ano || ''}</div></div><span class="r">${meu.nota != null ? `você ${selo(meu.nota)}` : meu.visto ? 'visto' : ''}</span></a>`; }).join('') || '<p class="note">Lista vazia.</p>';
+        // a lista é sua: dá para trocar a ordem, pôr e tirar títulos
+        const editar = vendo ? '' : `<a class="texto" href="#/editar/lista-${Number(b.dataset.id)}" style="display:block;padding:4px 0 8px">Editar esta lista</a>`;
+        if (corpo) corpo.innerHTML = editar + ((data || []).map((i) => { const r = info.get(K(i.tipo, i.tmdb_id)) || {}; const meu = dados.titulo(i.tipo, i.tmdb_id); return `<a class="li" href="#/${i.tipo}/${i.tmdb_id}" style="grid-template-columns:26px 36px 1fr auto"><span class="date" style="font-size:18px">${i.posicao}</span>${poster({ titulo: r.titulo || '', poster: r.poster }, { tam: 'w154' })}<div><div class="t">${esc(r.titulo || 'Sem título')}</div><div class="s">${r.ano || ''}</div></div><span class="r">${meu.nota != null ? `você ${selo(meu.nota)}` : meu.visto ? 'visto' : ''}</span></a>`; }).join('') || '<p class="note">Lista vazia.</p>');
       } else caixa.querySelector('.temp-c')?.remove();
     }
   };
