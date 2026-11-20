@@ -204,6 +204,36 @@ export async function filme(id, opc = {}) {
   };
 }
 
+/** Todas as reviews da comunidade de um título. O TMDB separa por idioma, então são duas buscas
+    (português e inglês) juntadas numa lista só: [{ id, idioma: 'pt' | 'en', autor, nota, texto, data }]. */
+export async function reviewsTodas(tipo, id) {
+  const caminho = `${tipo === 'serie' ? 'tv' : 'movie'}/${id}/reviews`;
+  const doIdioma = async (language, idioma) => {
+    const saida = [];
+    for (let page = 1; page <= 3; page++) {
+      const d = await api(caminho, { language, page }, { ttl: DIA });
+      saida.push(...(d.results || []).map((r) => ({
+        id: r.id, idioma,
+        autor: r.author_details?.name || r.author || r.author_details?.username || 'anônimo',
+        nota: r.author_details?.rating ?? null, // já vem de 0 a 10
+        texto: (r.content || '').replace(/\r/g, '').trim(),
+        data: (r.created_at || '').slice(0, 10),
+      })));
+      if (page >= (d.total_pages || 1)) break;
+    }
+    return saida;
+  };
+  const [pt, en] = await Promise.all([doIdioma('pt-BR', 'pt').catch(() => []), doIdioma('en-US', 'en')]);
+  const vistas = new Set();
+  return [...pt, ...en].filter((r) => r.texto && !vistas.has(r.id) && vistas.add(r.id));
+}
+
+/** Cenas de um filme (imagens largas, sem título escrito), para o frame do dia. */
+export async function cenasDoFilme(id) {
+  const d = await api(`movie/${id}/images`, { include_image_language: 'null' }, { ttl: 30 * DIA });
+  return (d.backdrops || []).filter((b) => b.aspect_ratio > 1.7 && b.aspect_ratio < 1.85 && b.width >= 1280).map((b) => b.file_path);
+}
+
 /** Filmes dirigidos pela pessoa, da maior nota para a menor. */
 export async function filmesDoDiretor(pessoaId) {
   const d = await api(`person/${pessoaId}/movie_credits`, { language: 'en-US' }, { ttl: 7 * DIA });

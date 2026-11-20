@@ -1,6 +1,7 @@
 // Partida do app e navegação.
 // Rotas (no #): /inicio /buscar /lista /diario /perfil são abas;
-// /filme/ID /serie/ID /pessoa/ID abrem por cima, na "ficha". O botão voltar do celular funciona.
+// /filme/ID /serie/ID /pessoa/ID (e /reviews/filme-ID, /ranking/pessoa-ID, /frame/hoje) abrem por cima,
+// na "ficha". O botão voltar do celular funciona.
 import { carregarChaves } from './config.js';
 import { $, $$, esqueletoFicha, erroFicha } from './ui.js';
 import * as inicio from './telas/inicio.js';
@@ -13,14 +14,17 @@ import * as serie from './telas/serie.js';
 import * as pessoa from './telas/pessoa.js';
 import * as importar from './telas/importar.js';
 import * as calendario from './telas/calendario.js';
+import * as reviews from './telas/reviews.js';
+import * as ranking from './telas/ranking.js';
+import * as frame from './telas/frame.js';
 import * as dados from './dados.js';
 import * as social from './social.js';
-import { carinha } from './ovo.js';
+import { simboloEscondido } from './ovo.js';
 import * as nuvem from './nuvem.js';
 
 const ABAS = { inicio, buscar, lista, diario, perfil };
 const NOMES = { inicio: 'Início', buscar: 'Buscar', lista: 'Quero ver', diario: 'Diário', perfil: 'Perfil' };
-const FICHAS = { filme, serie, pessoa, importar, calendario };
+const FICHAS = { filme, serie, pessoa, importar, calendario, reviews, ranking, frame };
 
 const view = $('#view');
 const sheet = $('#sheet');
@@ -54,6 +58,8 @@ async function navegar() {
     sheet.oninput = null;
     sheet.onpointerup = null;
     sheet.ontouchend = null;
+    sheet.onpointerdown = null;
+    sheet.onkeydown = null;
     sheet.innerHTML = esqueletoFicha();
     sheet.scrollTop = 0;
     const ctx = { vivo: () => minhaVez === vez };
@@ -109,8 +115,8 @@ $('.tabs').addEventListener('click', (e) => {
   if (a && a.getAttribute('href') === location.hash && sheet.hidden) window.scrollTo({ top: 0, behavior: 'smooth' });
 });
 
-// o título grande do topo muda com a aba; se hoje a carinha do easter egg estiver escondida no topo, ela fica ao lado dele
-$('#titulo').innerHTML = `<span id="titulo-texto">Início</span>${carinha('logo')}`;
+// o título grande do topo muda com a aba; se hoje a simboloEscondido do easter egg estiver escondida no topo, ela fica ao lado dele
+$('#titulo').innerHTML = `<span id="titulo-texto">Início</span>${simboloEscondido('logo')}`;
 
 window.addEventListener('hashchange', () => { passos++; navegar(); });
 
