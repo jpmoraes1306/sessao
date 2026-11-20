@@ -32,7 +32,7 @@ function salvar() {
   try { localStorage.setItem(K, JSON.stringify(d)); } catch { /* sem espaço: segue na memória */ }
 }
 
-const hoje = () => new Date().toLocaleDateString('sv-SE');
+const hoje = () => new Date().toLocaleDateString('sv-SE', { timeZone: 'America/Sao_Paulo' }); // o dia do app é o de Brasília, igual ao do servidor
 const chaveDe = (tipo, id) => `${tipo}:${id}`;
 const ke = (t, e) => `${t}x${e}`;
 const eu = () => nuvem.usuario()?.id || null;
@@ -46,19 +46,29 @@ const banco = () => (eu() ? nuvem.banco() : null);
 function naConta(alvo, fn) {
   const [descricao, suja] = [].concat(alvo);
   const b = banco();
-  if (!b) return;
-  const falhou = (motivo) => {
-    console.warn(`Não gravou na conta (${descricao}):`, motivo);
-    if (suja) { d.pendentes = { ...d.pendentes, [suja]: true }; salvar(); }
-  };
+  // A chave fica pendente ANTES do pedido e só sai quando a conta confirma. Assim a marcação não se
+  // perde se o app fechar no meio, se a internet cair ou se o login guardado ainda não foi conferido.
+  const senha = Date.now() + Math.random();
+  if (suja && (b || d.dono)) { d.pendentes = { ...d.pendentes, [suja]: senha }; salvar(); }
+  if (!b) return; // sem sessão agora: sobe na próxima sincronização
   Promise.resolve().then(() => fn(b, eu())).then((r) => {
     const erros = [].concat(r || []).map((x) => x?.error).filter(Boolean);
-    if (erros.length) falhou(erros[0].message);
-  }).catch((erro) => falhou(erro?.message || erro));
+    if (erros.length) { console.warn(`Não gravou na conta (${descricao}):`, erros[0].message); return; }
+    // confirmou: sai da fila, a menos que tenha havido outra mudança na mesma chave depois desta
+    if (suja && d.pendentes?.[suja] === senha) { delete d.pendentes[suja]; salvar(); }
+  }).catch((erro) => console.warn(`Não gravou na conta (${descricao}):`, erro?.message || erro));
 }
 
-/** Quantas marcações estão esperando a internet para subir. */
-export const pendencias = () => Object.keys(d.pendentes || {}).length;
+const temPendentes = () => Object.keys(d.pendentes || {}).length > 0;
+/** Quantas marcações estão esperando a internet para subir (as que acabaram de sair não contam). */
+export const pendencias = () => Object.values(d.pendentes || {}).filter((v) => typeof v !== 'number' || Date.now() - v > 10000).length;
+
+/** Se quem está logado não é o dono da cópia deste aparelho, a cópia não vale para ele: começa limpa.
+    (Evita misturar as marcações de um na conta do outro logo depois de trocar de conta.) */
+function conferirDono() {
+  const user = eu();
+  if (user && d.dono && d.dono !== user) d = { dono: null, titulos: {}, series: {}, favoritos: [], pendentes: {} };
+}
 
 /** Reenvia o estado guardado no aparelho de tudo que não conseguiu gravar. Devolve true se não sobrou nada. */
 async function reenviar() {
@@ -111,11 +121,12 @@ const resumoDe = (m) => ({
 
 /* ---------- títulos ---------- */
 /** Registro do título para esta pessoa ({} se ela nunca mexeu nele). */
-export const titulo = (tipo, id) => d.titulos[chaveDe(tipo, id)] || {};
-export const todos = () => Object.values(d.titulos);
+export const titulo = (tipo, id) => { conferirDono(); return d.titulos[chaveDe(tipo, id)] || {}; };
+export const todos = () => { conferirDono(); return Object.values(d.titulos); };
 
 /** meta = { tipo, id, titulo, ano, data, poster, duracao, tmdb, pop, generos }; mudanca = { visto, nota, curtido, quero, seguindo }. */
 export function marcar(meta, mudanca) {
+  conferirDono();
   const k = chaveDe(meta.tipo, meta.id);
   const antes = d.titulos[k] || {};
   const reg = { ...antes, ...meta, ...mudanca, em: new Date().toISOString() };
@@ -169,6 +180,7 @@ export async function garantirResumo(meta) {
 /* ---------- diário ---------- */
 /** Registra uma sessão (data e se foi revisto). Marca o título como visto se ainda não estava. */
 export async function registrarSessao(meta, data, revisto, juntosId = null) {
+  conferirDono();
   const b = banco();
   if (!b) return false;
   const k = chaveDe(meta.tipo, meta.id);
@@ -211,7 +223,9 @@ export async function desfazerVerDeNovo(meta) {
 /* ---------- review ---------- */
 /** Salva (ou apaga, com texto vazio) a review da pessoa para o título. Escrever uma review marca como visto. */
 export function salvarReview(meta, texto, spoiler) {
+  conferirDono();
   const k = chaveDe(meta.tipo, meta.id);
+  const tinhaQuero = !!d.titulos[k]?.quero;
   const limpo = (texto || '').trim();
   const agora = new Date().toISOString();
   const reg = { ...d.titulos[k], ...meta, review: limpo || null, spoiler: limpo ? !!spoiler : false, reviewEm: limpo ? agora : null, em: agora };
@@ -221,6 +235,7 @@ export function salvarReview(meta, texto, spoiler) {
   naConta(['review', k], (b, user) => Promise.all([
     b.from('cache_titulos').upsert({ tipo: meta.tipo, tmdb_id: meta.id, resumo: resumoDe(reg) }, { onConflict: 'tipo,tmdb_id', ignoreDuplicates: true }),
     b.from('avaliacoes').upsert({ user_id: user, tipo: meta.tipo, tmdb_id: meta.id, visto: !!reg.visto, nota: reg.nota ?? null, curtido: !!reg.curtido, seguindo: !!reg.seguindo, review: reg.review, spoiler: reg.spoiler, review_em: reg.reviewEm, atualizado_em: agora }),
+    ...(tinhaQuero && !reg.quero ? [b.from('quero_ver').delete().match({ user_id: user, tipo: meta.tipo, tmdb_id: meta.id, juntos: false })] : []),
   ]));
   return reg;
 }
@@ -230,6 +245,7 @@ export const favoritos = () => d.favoritos || [];
 export const ehFavorito = (tipo, id) => favoritos().some((f) => f.tipo === tipo && f.id === id);
 /** Põe ou tira dos favoritos. Devolve false se já há 4 e a pessoa tentou pôr o quinto. */
 export function alternarFavorito(meta) {
+  conferirDono();
   const lista = favoritos().filter((f) => !(f.tipo === meta.tipo && f.id === meta.id));
   if (lista.length === favoritos().length) {
     if (lista.length >= 4) return false;
@@ -246,10 +262,10 @@ export function alternarFavorito(meta) {
 }
 
 /* ---------- episódios ---------- */
-const serieDe = (id) => (d.series[id] = d.series[id] || { eps: {}, temps: {} });
+const serieDe = (id) => { conferirDono(); return (d.series[id] = d.series[id] || { eps: {}, temps: {} }); };
 
 /** { "2x3": { d: "2026-11-19", r: 8, v: 2 } }  (d = dia, r = nota, v = vezes que viu, só quando passa de 1) */
-export const episodios = (serieId) => d.series[serieId]?.eps || {};
+export const episodios = (serieId) => { conferirDono(); return d.series[serieId]?.eps || {}; };
 export const notaTemporada = (serieId, t) => d.series[serieId]?.temps?.[t] ?? null;
 
 export function marcarEpisodios(serieId, lista, visto) {
@@ -304,7 +320,7 @@ export function darNotaTemporada(serieId, t, r) {
 export const totalEpisodios = () => Object.values(d.series).reduce((a, s) => a + Object.keys(s.eps).length, 0);
 
 export function apagarTudo() {
-  d = { dono: d.dono, titulos: {}, series: {}, favoritos: [] };
+  d = { dono: d.dono, titulos: {}, series: {}, favoritos: [], pendentes: {} };
   salvar();
 }
 
@@ -338,15 +354,16 @@ export async function resumos(pares) {
 
 /** Sobe para a conta o que foi marcado neste aparelho antes do login. */
 async function subirLocal(b, user) {
+  const ok = async (pedido) => { const { error } = await pedido; if (error) throw error; };
   const titulos = Object.values(d.titulos);
   if (titulos.length) {
-    await b.from('cache_titulos').upsert(titulos.map((t) => ({ tipo: t.tipo, tmdb_id: t.id, resumo: resumoDe(t) })), { onConflict: 'tipo,tmdb_id', ignoreDuplicates: true });
+    await ok(b.from('cache_titulos').upsert(titulos.map((t) => ({ tipo: t.tipo, tmdb_id: t.id, resumo: resumoDe(t) })), { onConflict: 'tipo,tmdb_id', ignoreDuplicates: true }));
     const av = titulos.filter((t) => t.visto || t.nota != null || t.curtido || t.seguindo);
-    if (av.length) await b.from('avaliacoes').upsert(av.map((t) => ({ user_id: user, tipo: t.tipo, tmdb_id: t.id, visto: !!t.visto, nota: t.nota ?? null, curtido: !!t.curtido, seguindo: !!t.seguindo, atualizado_em: t.em || new Date().toISOString() })), { ignoreDuplicates: true });
+    if (av.length) await ok(b.from('avaliacoes').upsert(av.map((t) => ({ user_id: user, tipo: t.tipo, tmdb_id: t.id, visto: !!t.visto, nota: t.nota ?? null, curtido: !!t.curtido, seguindo: !!t.seguindo, atualizado_em: t.em || new Date().toISOString() })), { ignoreDuplicates: true }));
     const q = titulos.filter((t) => t.quero);
-    if (q.length) await b.from('quero_ver').upsert(q.map((t) => ({ user_id: user, tipo: t.tipo, tmdb_id: t.id, juntos: false, adicionado_em: t.queroEm || t.em || new Date().toISOString() })), { ignoreDuplicates: true });
+    if (q.length) await ok(b.from('quero_ver').upsert(q.map((t) => ({ user_id: user, tipo: t.tipo, tmdb_id: t.id, juntos: false, adicionado_em: t.queroEm || t.em || new Date().toISOString() })), { ignoreDuplicates: true }));
     const vistosHoje = titulos.filter((t) => t.tipo === 'filme' && t.visto && t.vistoEm);
-    if (vistosHoje.length) await b.from('diario').upsert(vistosHoje.map((t) => ({ user_id: user, tipo: t.tipo, tmdb_id: t.id, data: t.vistoEm, nota: t.nota ?? null, origem: 'app' })), { onConflict: 'user_id,tipo,tmdb_id,data', ignoreDuplicates: true });
+    if (vistosHoje.length) await ok(b.from('diario').upsert(vistosHoje.map((t) => ({ user_id: user, tipo: t.tipo, tmdb_id: t.id, data: t.vistoEm, nota: t.nota ?? null, origem: 'app' })), { onConflict: 'user_id,tipo,tmdb_id,data', ignoreDuplicates: true }));
   }
   const eps = [];
   const temps = [];
@@ -354,11 +371,12 @@ async function subirLocal(b, user) {
     for (const [k, v] of Object.entries(s.eps || {})) { const [t, e] = k.split('x').map(Number); eps.push({ user_id: user, serie_id: Number(serie), temporada: t, episodio: e, data: v.d || hoje(), nota: v.r ?? null, vezes: v.v || 1 }); }
     for (const [t, r] of Object.entries(s.temps || {})) temps.push({ user_id: user, serie_id: Number(serie), temporada: Number(t), nota: r });
   }
-  for (let i = 0; i < eps.length; i += 500) await b.from('episodios_vistos').upsert(eps.slice(i, i + 500), { ignoreDuplicates: true });
-  if (temps.length) await b.from('notas_temporada').upsert(temps, { ignoreDuplicates: true });
+  for (let i = 0; i < eps.length; i += 500) await ok(b.from('episodios_vistos').upsert(eps.slice(i, i + 500), { ignoreDuplicates: true }));
+  if (temps.length) await ok(b.from('notas_temporada').upsert(temps, { ignoreDuplicates: true }));
 }
 
 let sincronizando = null;
+let ultimaSinc = 0; // quando a cópia local foi trocada pela da conta pela última vez
 /** Traz da conta tudo que é da pessoa e troca a cópia local. Chamado no login e depois do import. */
 export function sincronizar() {
   if (sincronizando) return sincronizando;
@@ -368,10 +386,10 @@ export function sincronizar() {
   sincronizando = (async () => {
     try {
       // o que foi marcado sem internet sobe primeiro; se ainda não der, não sincroniza (para não perder a marcação)
-      if (d.dono === user && pendencias() && !(await reenviar())) return false;
+      if (d.dono === user && temPendentes() && !(await reenviar())) return false;
       if (d.dono !== user) {
         if (d.dono === null) await subirLocal(b, user); // marcado antes do login: vai para a conta
-        else d = { dono: null, titulos: {}, series: {}, favoritos: [] }; // outra pessoa usou este aparelho: começa limpo
+        else d = { dono: null, titulos: {}, series: {}, favoritos: [], pendentes: {} }; // outra pessoa usou este aparelho: começa limpo
       }
       const [av, quero, eps, temps, favs] = await Promise.all([
         lerTudo(() => b.from('avaliacoes').select('tipo, tmdb_id, visto, nota, curtido, seguindo, review, spoiler, review_em, atualizado_em').eq('user_id', user).order('tmdb_id')),
@@ -403,7 +421,15 @@ export function sincronizar() {
         const s = (novo.series[t.serie_id] = novo.series[t.serie_id] || { eps: {}, temps: {} });
         s.temps[t.temporada] = Number(t.nota);
       }
+      // o que foi marcado enquanto a conta era lida não pode sumir: vale o estado do aparelho, e segue na fila
+      for (const chave of Object.keys(d.pendentes || {})) {
+        if (chave === 'favs') novo.favoritos = d.favoritos || [];
+        else if (chave.startsWith('eps:')) { const serie = chave.slice(4); if (d.series[serie]) novo.series[serie] = d.series[serie]; else delete novo.series[serie]; }
+        else if (d.titulos[chave]) novo.titulos[chave] = d.titulos[chave]; else delete novo.titulos[chave];
+        novo.pendentes[chave] = d.pendentes[chave];
+      }
       d = novo;
+      ultimaSinc = Date.now();
       salvar();
       ouvintes.forEach((fn) => fn());
       return true;
@@ -418,7 +444,14 @@ export function sincronizar() {
 }
 
 // quando a internet volta, manda o que ficou pendente
-if (typeof window !== 'undefined') window.addEventListener('online', () => { if (pendencias()) sincronizar(); });
+if (typeof window !== 'undefined') {
+  window.addEventListener('online', () => { if (temPendentes() || !ultimaSinc) sincronizar(); });
+  // ao voltar para o app depois de um tempo, busca de novo: o outro aparelho (ou o computador) pode ter
+  // mudado alguma coisa, e gravar a partir de uma cópia velha apagaria essa mudança
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible' && eu() && (temPendentes() || Date.now() - ultimaSinc > 5 * 60 * 1000)) sincronizar();
+  });
+}
 
 // ao entrar, sincroniza; ao sair, a cópia local fica (ela é de quem estava logado)
 let ultimoDono = null;

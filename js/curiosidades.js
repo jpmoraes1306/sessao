@@ -80,17 +80,18 @@ export async function buscar(imdbId) {
     const en = ent.sitelinks?.enwiki?.title;
     let secoes = [];
     let artigo = null;
-    if (pt) { try { secoes = await secoesDa('pt', pt); if (secoes.length) artigo = { lingua: 'pt', titulo: pt }; } catch { /* tenta em inglês */ } }
+    let incompleto = false; // alguma consulta à Wikipédia falhou
+    if (pt) { try { secoes = await secoesDa('pt', pt); if (secoes.length) artigo = { lingua: 'pt', titulo: pt }; } catch { incompleto = true; /* tenta em inglês */ } }
     if (en) {
       // completa com o artigo em inglês as seções que o português não tem
       try {
         const extras = (await secoesDa('en', en)).filter((s) => !secoes.some((x) => x.titulo === s.titulo));
         if (extras.length && !artigo) artigo = { lingua: 'en', titulo: en };
         secoes = [...secoes, ...extras];
-      } catch { /* fica só com o que tem */ }
+      } catch { incompleto = true; /* fica só com o que tem */ }
     }
     const v = { fatos, secoes, artigo };
-    gravar(k, v);
+    if (!incompleto) gravar(k, v); // incompleto: mostra o que veio e tenta de novo na próxima visita
     return v;
   } catch {
     return salvo?.v || null;

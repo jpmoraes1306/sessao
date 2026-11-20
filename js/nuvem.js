@@ -42,7 +42,7 @@ export function usuario() {
 
 async function aoEntrar() {
   if (!sessao || !cliente) { perfil = null; perfis = []; return; }
-  const [{ data: segredos }, { data: todos }] = await Promise.all([
+  const [{ data: segredos, error: erroSegredos }, { data: todos }] = await Promise.all([
     cliente.from('segredos').select('nome, valor'),
     cliente.from('perfis').select('*').order('criado_em'),
   ]);
@@ -54,7 +54,7 @@ async function aoEntrar() {
   const s = Object.fromEntries((segredos || []).map((x) => [x.nome, x.valor]));
   if (s.tmdb) {
     if (s.tmdb !== chave('tmdb') || (s.omdb || '') !== chave('omdb')) salvarChaves({ tmdb: s.tmdb, omdb: s.omdb || chave('omdb') });
-  } else if (chave('tmdb')) {
+  } else if (chave('tmdb') && !erroSegredos) { // só quando a leitura deu certo e a conta realmente não tem as chaves
     const linhas = [{ nome: 'tmdb', valor: chave('tmdb') }, ...(chave('omdb') ? [{ nome: 'omdb', valor: chave('omdb') }] : [])];
     const { error } = await cliente.from('segredos').upsert(linhas);
     if (error) console.warn('Não deu para guardar as chaves na conta:', error.message);

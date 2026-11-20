@@ -19,7 +19,7 @@ import * as ranking from './telas/ranking.js';
 import * as frame from './telas/frame.js';
 import * as dados from './dados.js';
 import * as social from './social.js';
-import { simboloEscondido } from './ovo.js';
+import { simboloEscondido, esconderijoDeHoje } from './ovo.js';
 import * as nuvem from './nuvem.js';
 
 const ABAS = { inicio, buscar, lista, diario, perfil };
@@ -30,7 +30,7 @@ const view = $('#view');
 const sheet = $('#sheet');
 let abaNaTela = null;       // aba desenhada em #view
 let onde = null;            // { tipo: 'aba' | 'ficha', hash }
-let passos = 0;             // navegações feitas dentro do app (para o botão voltar)
+let topo = 0;               // quantas telas o app já empilhou no histórico (para o botão voltar)
 let vez = 0;                // invalida desenhos de fichas que ficaram para trás
 const pilha = [];           // fichas abertas em sequência
 const rolagem = new Map();  // hash -> posição da rolagem
@@ -48,12 +48,10 @@ let semConta = false;
 try { semConta = COMPUTADOR_DE_TESTE && sessionStorage.getItem('sessao:sem-conta') === '1'; } catch { /* sem armazenamento */ }
 /** Este aparelho tem um login guardado? Dá para saber na hora, antes de falar com o servidor. */
 const temLoginGuardado = () => { try { return Object.keys(localStorage).some((k) => /^sb-.+-auth-token$/.test(k)); } catch { return false; } };
-function precisaEntrar() {
-  if (nuvem.usuario() || semConta) return false;
-  if (!nuvem.iniciou()) return !temLoginGuardado();
-  // sem internet e com login guardado: abre com o que está no aparelho
-  return nuvem.disponivel() || !temLoginGuardado();
-}
+// Com login guardado o app abre, mesmo que a sessão ainda não tenha sido conferida (internet lenta ou sem
+// internet): mostra o que está no aparelho e o que for marcado fica na fila. Ao sair, ou quando o servidor
+// recusa o login guardado, ele é apagado do aparelho e a tela de entrada aparece.
+const precisaEntrar = () => !(nuvem.usuario() || semConta || temLoginGuardado());
 let ligando = null; // a conferência do login guardado, para o botão esperar por ela
 /** Mostra ou esconde a tela de entrada conforme o login. Devolve true quando o app está aberto. */
 function porteiro() {
@@ -91,7 +89,12 @@ entrada.onclick = async (e) => {
   }
   b.disabled = true;
   b.textContent = 'Abrindo o Google…';
-  try { await ligando; await nuvem.entrar(); } catch { b.disabled = false; b.textContent = 'Entrar com o Google'; toast('Não deu para abrir o login. Confira a internet.'); }
+  try { sessionStorage.setItem('sessao:ir', location.hash); } catch { /* depois do login abre no Início */ }
+  try {
+    await ligando;
+    if (!nuvem.disponivel()) { ligando = nuvem.iniciar(); await ligando; } // a primeira tentativa ficou sem internet: tenta de novo
+    await nuvem.entrar();
+  } catch { b.disabled = false; b.textContent = 'Entrar com o Google'; toast('Não deu para abrir o login. Confira a internet.'); }
 };
 
 async function navegar() {
@@ -136,7 +139,9 @@ async function navegar() {
   const vindoDeFicha = onde?.tipo === 'ficha';
   onde = { tipo: 'aba', hash: `#/${nome}` };
   $$('.tabs a').forEach((a) => (a.dataset.tab === nome ? a.setAttribute('aria-current', 'page') : a.removeAttribute('aria-current')));
+  montarTitulo();
   $('#titulo-texto').textContent = NOMES[nome];
+  view.dataset.aba = nome; // as abas conferem isto depois de esperar a internet, para não desenhar por cima de outra
   if (abaNaTela === nome && ABAS[nome].manter) {
     ABAS[nome].atualizar?.(view); // volta para a mesma aba: mantém o que estava, só atualiza o que mudou
   } else {
@@ -155,7 +160,7 @@ sheet.addEventListener('click', (e) => {
   const b = e.target.closest('[data-acao]');
   if (!b) return;
   if (b.dataset.acao === 'voltar') {
-    if (passos > 0) history.back();
+    if ((history.state?.sessaoI ?? 0) > 0) history.back();
     else location.hash = '#/inicio';
   } else if (b.dataset.acao === 'recarregar') {
     navegar();
@@ -171,9 +176,25 @@ $('.tabs').addEventListener('click', (e) => {
 });
 
 // o título grande do topo muda com a aba; se hoje a simboloEscondido do easter egg estiver escondida no topo, ela fica ao lado dele
-$('#titulo').innerHTML = `<span id="titulo-texto">Início</span>${simboloEscondido('logo')}`;
+let lugarNoTitulo = null;
+function montarTitulo() {
+  const lugar = esconderijoDeHoje();
+  if (lugar === lugarNoTitulo) return; // só refaz quando o dia vira e o esconderijo muda
+  lugarNoTitulo = lugar;
+  const texto = $('#titulo-texto')?.textContent || 'Início';
+  $('#titulo').innerHTML = `<span id="titulo-texto"></span>${simboloEscondido('logo')}`;
+  $('#titulo-texto').textContent = texto;
+}
+montarTitulo();
 
-window.addEventListener('hashchange', () => { passos++; navegar(); });
+// Cada tela nova ganha um número no histórico. Assim o "voltar" sabe se há uma tela do app atrás
+// (número maior que zero) ou se o app foi aberto direto aqui, e nesse caso vai para o Início.
+function anotarPosicao(inicial = false) {
+  const i = history.state?.sessaoI;
+  if (i == null) history.replaceState({ ...(history.state || {}), sessaoI: inicial ? 0 : ++topo }, '');
+  else topo = Math.max(topo, i);
+}
+window.addEventListener('hashchange', () => { anotarPosicao(); navegar(); });
 
 // quem está logado aparece no topo; ao entrar ou sair, a tela atual é refeita
 function mostrarLogin() {
@@ -209,6 +230,8 @@ let esperaRefazer = 0;
 const refazerAba = () => { // junta os avisos que chegam em sequência (login, sincronização, dados do outro)
   clearTimeout(esperaRefazer);
   esperaRefazer = setTimeout(() => {
+    // quem está digitando (busca, review) não perde o que escreveu: a tela se atualiza na próxima visita
+    if (document.activeElement?.matches?.('input:not([type="range"]), textarea')) return;
     if (onde?.tipo === 'aba') { abaNaTela = null; navegar(); }
     // numa ficha, só refaz se a pessoa ainda está no topo (para não tirar a tela do lugar no meio da leitura)
     else if (onde?.tipo === 'ficha' && sheet.scrollTop < 60) navegar();
@@ -224,6 +247,13 @@ ligando = nuvem.iniciar();
 porteiro(); // quem nunca entrou neste aparelho vê a tela de entrada na hora, sem esperar o servidor
 await Promise.race([ligando, new Promise((r) => setTimeout(r, 1500))]);
 pronto = true;
+anotarPosicao(true);
+// quem tocou em "Entrar" numa tela específica volta para ela depois do Google
+try {
+  const ir = sessionStorage.getItem('sessao:ir');
+  sessionStorage.removeItem('sessao:ir');
+  if (voltandoDoGoogle && ir?.startsWith('#/') && !location.hash) history.replaceState(history.state, '', location.pathname + location.search + ir);
+} catch { /* abre no Início */ }
 if (porteiro()) navegar();
 
 if ('serviceWorker' in navigator) {

@@ -42,19 +42,21 @@ export async function gravar(exp, escolhas, aoAvancar = () => {}, dono = null) {
   for (const f of exp.filmes) { const t = alvo(f.chave); if (t) unicos.set(`${t.tipo}:${t.id}`, t); }
   const lista = [...unicos.values()];
   const resumos = [];
+  const fracos = []; // o TMDB não respondeu: resumo reduzido, que não pode cobrir um resumo completo já guardado
   let proximo = 0;
   let feitos = 0;
   await Promise.all(Array.from({ length: 8 }, async () => {
     while (proximo < lista.length) {
       const t = lista[proximo++];
       try { resumos.push({ ...par(t), resumo: await tmdb.resumo(t.tipo, t.id), buscado_em: new Date().toISOString() }); } catch {
-        resumos.push({ ...par(t), resumo: { titulo: t.titulo, ano: t.ano ?? null, data: t.data || '', poster: t.poster || '', nota: t.nota || 0, pop: t.pop || 0 }, buscado_em: new Date().toISOString() });
+        fracos.push({ ...par(t), resumo: { titulo: t.titulo, ano: t.ano ?? null, data: t.data || '', poster: t.poster || '', nota: t.nota || 0, pop: t.pop || 0 }, buscado_em: new Date().toISOString() });
       }
       aoAvancar('Buscando os dados de cada título', ++feitos, lista.length);
     }
   }));
   aoAvancar('Gravando na sua conta', 0, 6);
   await emLotes(resumos, 200, (l) => b.from('cache_titulos').upsert(l, { onConflict: 'tipo,tmdb_id' }));
+  await emLotes(fracos, 200, (l) => b.from('cache_titulos').upsert(l, { onConflict: 'tipo,tmdb_id', ignoreDuplicates: true }));
 
   /* 2) estado de cada título: visto, nota atual, curtido */
   const estado = new Map();
@@ -70,7 +72,20 @@ export async function gravar(exp, escolhas, aoAvancar = () => {}, dono = null) {
   for (const n of [...exp.notas].sort((x, y) => x.data.localeCompare(y.data))) { const e = de(n.filme); if (e) { e.nota = n.nota; maisNovo(e, n.data); } }
   for (const dia of exp.diario) { const e = de(dia.filme); if (e) maisNovo(e, dia.data); }
   for (const c of exp.curtidos) { const e = de(c.filme); if (e) { e.curtido = true; maisNovo(e, c.data); } }
-  const avaliacoes = [...estado.values()].map((e) => ({ ...e, atualizado_em: e.atualizado_em === '1970-01-01' ? new Date().toISOString() : `${e.atualizado_em}T12:00:00Z` }));
+  // Segundo import (ou import depois de já usar o app): o que está na conta vale. O Letterboxd só completa
+  // o que falta, para não trocar uma nota mudada no app nem tirar um "curtido" dado aqui.
+  const jaNaConta = new Map();
+  for (let i = 0; ; i += 1000) {
+    const { data, error } = await b.from('avaliacoes').select('tipo, tmdb_id, nota, curtido, atualizado_em').eq('user_id', user).order('tipo').order('tmdb_id').range(i, i + 999);
+    if (error) throw new Error(error.message);
+    for (const a of data) jaNaConta.set(`${a.tipo}:${a.tmdb_id}`, a);
+    if (data.length < 1000) break;
+  }
+  const avaliacoes = [...estado.values()].map((e) => {
+    const ja = jaNaConta.get(`${e.tipo}:${e.tmdb_id}`);
+    const em = e.atualizado_em === '1970-01-01' ? new Date().toISOString() : `${e.atualizado_em}T12:00:00Z`;
+    return ja ? { ...e, nota: ja.nota ?? e.nota, curtido: ja.curtido || e.curtido, atualizado_em: ja.atualizado_em || em } : { ...e, atualizado_em: em };
+  });
   // quem não tem nota no Letterboxd vai sem a coluna "nota", para não apagar uma nota já dada no app
   await emLotes(avaliacoes.filter((a) => a.nota != null), 500, (l) => b.from('avaliacoes').upsert(l));
   await emLotes(avaliacoes.filter((a) => a.nota == null).map(({ nota, ...resto }) => resto), 500, (l) => b.from('avaliacoes').upsert(l));
@@ -96,8 +111,10 @@ export async function gravar(exp, escolhas, aoAvancar = () => {}, dono = null) {
   aoAvancar('Gravando na sua conta', 3, 6);
 
   /* 5) favoritos do perfil */
+  // só quando a conta ainda não tem favoritos: os escolhidos no app não são trocados pelos do Letterboxd
   const favoritos = exp.favoritos.map(alvo).filter(Boolean).slice(0, 4).map((t, i) => ({ user_id: user, posicao: i + 1, ...par(t) }));
-  if (favoritos.length) await emLotes(favoritos, 10, (l) => b.from('favoritos').upsert(l));
+  const { count: favoritosNaConta } = await b.from('favoritos').select('posicao', { count: 'exact', head: true }).eq('user_id', user);
+  if (favoritos.length && !favoritosNaConta) await emLotes(favoritos, 10, (l) => b.from('favoritos').upsert(l));
   aoAvancar('Gravando na sua conta', 4, 6);
 
   /* 6) listas (os rankings por diretor entram com a ordem) */
@@ -114,7 +131,10 @@ export async function gravar(exp, escolhas, aoAvancar = () => {}, dono = null) {
   aoAvancar('Gravando na sua conta', 5, 6);
 
   /* 7) o que ficou sem casar vai para a lista de pendências, para resolver depois */
-  const pendentes = exp.filmes.filter((f) => !alvo(f.chave)).map((f) => ({ user_id: user, nome: f.nome, ano: f.ano, dados: { uri: f.uri }, resolvido: false }));
+  // (título sem ano não é barrado pela regra de "único" do banco, então confere antes para não repetir a cada import)
+  const { data: jaPendentes } = await b.from('import_pendencias').select('nome, ano').eq('user_id', user);
+  const repetida = new Set((jaPendentes || []).map((x) => `${x.nome}|${x.ano ?? ''}`));
+  const pendentes = exp.filmes.filter((f) => !alvo(f.chave) && !repetida.has(`${f.nome}|${f.ano ?? ''}`)).map((f) => ({ user_id: user, nome: f.nome, ano: f.ano, dados: { uri: f.uri }, resolvido: false }));
   if (pendentes.length) await emLotes(pendentes, 200, (l) => b.from('import_pendencias').upsert(l, { onConflict: 'user_id,nome,ano', ignoreDuplicates: true }));
   aoAvancar('Gravando na sua conta', 6, 6);
 

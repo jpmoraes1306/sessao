@@ -42,7 +42,9 @@ export async function carregar() {
     juntos = new Map(jun.map((j) => [k(j.tipo, j.tmdb_id), { por: j.user_id, em: j.adicionado_em }]));
     carregado = true;
   } catch (erro) {
+    // sem avisar as telas: redesenhar sem dado novo só faria a tela piscar (e o frame do dia tentaria de novo sem parar)
     console.warn('Não deu para carregar os dados do outro:', erro?.message || erro);
+    return;
   }
   ouvintes.forEach((fn) => fn());
 }

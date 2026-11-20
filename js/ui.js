@@ -10,7 +10,7 @@ export const norm = (s) => String(s).normalize('NFD').replace(/[̀-ͯ]/g, '').to
 
 /* ---------- datas ---------- */
 const SEM = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb'];
-export const hoje = () => new Date().toLocaleDateString('sv-SE'); // AAAA-MM-DD
+export const hoje = () => new Date().toLocaleDateString('sv-SE', { timeZone: 'America/Sao_Paulo' }); // AAAA-MM-DD, sempre o dia de Brasília (igual ao do servidor e para os dois)
 export const dataBR = (iso) => (iso ? iso.slice(0, 10).split('-').reverse().join('/') : '');
 const meioDia = (iso) => new Date(`${iso.slice(0, 10)}T12:00:00`);
 /** "sex, 22/11" (com o ano quando não é o ano atual). */
@@ -100,7 +100,7 @@ export function corDe(n) {
 const SOME = `onerror="this.remove()"`;
 export function poster(c, { lg = false, tam = 'w342' } = {}) {
   const [a, b] = corDe(c.titulo || '');
-  return `<div class="poster${lg ? ' lg' : ''}" style="--a:${a};--b:${b}">${c.poster ? `<img src="${img(c.poster, tam)}" alt="" loading="lazy" decoding="async" crossorigin="anonymous" ${SOME}>` : ''}<b>${esc(c.titulo)}</b>${c.ano ? `<span>${c.ano}</span>` : ''}</div>`;
+  return `<div class="poster${lg ? ' lg' : ''}" style="--a:${a};--b:${b}">${c.poster ? `<img src="${esc(img(c.poster, tam))}" alt="" loading="lazy" decoding="async" crossorigin="anonymous" ${SOME}>` : ''}<b>${esc(c.titulo)}</b>${c.ano ? `<span>${esc(c.ano)}</span>` : ''}</div>`;
 }
 const iniciais = (n) => String(n).split(' ').filter((w) => /^[A-ZÀ-Ý]/.test(w)).map((w) => w[0]).slice(0, 2).join('');
 export function foto(p, cls = '') {

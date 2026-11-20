@@ -5,7 +5,7 @@
 // - Símbolo e esconderijo dependem só da data, então são os mesmos nos dois celulares.
 import { img } from './tmdb.js';
 import * as nuvem from './nuvem.js';
-import { esc, hoje } from './ui.js';
+import { esc, hoje, toast } from './ui.js';
 
 const CAGE = { id: 2963, nome: 'Nicolas Cage', rosto: '/y1RtezurZYveYkVNRht7CwEgSYY.jpg' };
 const DAFOE = { id: 5293, nome: 'Willem Dafoe', rosto: '/ui8e4sgZAwMPi3hzEO53jyBJF9B.jpg' };
@@ -75,7 +75,9 @@ let achados = [];      // linhas do mês: { dia, user_id, achado_em }
 let dono = null;
 let carregando = null;
 const LOCAL = 'sessao:ovo:achado'; // dia em que este aparelho achou (vale também sem login)
-const achouAqui = () => { try { return localStorage.getItem(LOCAL) === hoje(); } catch { return false; } };
+// guarda o dia e de quem foi, para o achado de um não valer para o outro no mesmo aparelho
+const marcaLocal = () => `${hoje()}|${nuvem.usuario()?.id || ''}`;
+const achouAqui = () => { try { return localStorage.getItem(LOCAL) === marcaLocal(); } catch { return false; } };
 
 async function carregar() {
   const b = nuvem.usuario() ? nuvem.banco() : null;
@@ -85,11 +87,14 @@ async function carregar() {
 }
 /** Espera os achados do mês chegarem da conta (para o Perfil mostrar o placar). */
 export const pronto = () => carregando || Promise.resolve();
+/** Busca de novo quem achou (o outro pode ter achado depois que o app abriu, ou o mês virou). */
+export const atualizar = () => (carregando = carregar().catch(() => {}).then(() => { marcarAchado(); if (achouAqui()) enviar(); }));
 nuvem.aoMudar(() => {
   const eu = nuvem.usuario()?.id || null;
   if (eu === dono) return;
   dono = eu;
-  carregando = carregar().catch(() => {}).then(() => marcarAchado());
+  // se este aparelho achou hoje e a conta ainda não sabe (a internet caiu na hora), manda agora
+  carregando = carregar().catch(() => {}).then(() => { marcarAchado(); if (achouAqui()) enviar(); });
 });
 
 const hora = (iso) => new Date(iso).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
@@ -119,7 +124,7 @@ export function htmlPlacar(p, rotulo) {
 export function simboloEscondido(lugar) {
   if (lugar !== esconderijoDeHoje()) return '';
   const s = simboloDeHoje();
-  return `<button class="ovo-s${acheiHoje() ? ' achado' : ''}" data-ovo aria-label="Símbolo escondido de hoje: ${esc(s.nome)}">${s.svg}</button>`;
+  return `<button class="ovo-s${acheiHoje() ? ' achado' : ''}" data-ovo="${hoje()}" aria-label="Símbolo escondido de hoje: ${esc(s.nome)}">${s.svg}</button>`;
 }
 function marcarAchado() {
   if (acheiHoje()) document.querySelectorAll('[data-ovo]').forEach((b) => b.classList.add('achado'));
@@ -127,10 +132,14 @@ function marcarAchado() {
 
 /** Registra que você achou (uma vez por dia) e avisa o outro, se ele ainda não achou. */
 async function registrar() {
-  try { localStorage.setItem(LOCAL, hoje()); } catch { /* sem armazenamento, vale só nesta visita */ }
+  try { localStorage.setItem(LOCAL, marcaLocal()); } catch { /* sem armazenamento, vale só nesta visita */ }
+  await pronto();
+  await enviar();
+}
+/** Grava na conta o achado de hoje, se ainda não estiver lá. */
+async function enviar() {
   const b = nuvem.usuario() ? nuvem.banco() : null;
   if (!b) return;
-  await pronto();
   const eu = nuvem.usuario().id;
   if (doDia().some((a) => a.user_id === eu)) return;
   const { error } = await b.from('ovo_achados').upsert({ dia: hoje(), user_id: eu }, { onConflict: 'dia,user_id', ignoreDuplicates: true });
@@ -155,7 +164,7 @@ export async function abrirOvo() {
     let quem = 'Entre na sua conta para disputar com o outro quem acha primeiro.';
     if (meu && primeiro.user_id === eu) quem = `Você achou primeiro hoje, às ${hora(meu.achado_em)}.${o && hojeAchados.length < 2 ? ` ${esc(o.nome)} ainda está procurando.` : ''}`;
     else if (meu) quem = `${esc(nuvem.pessoa(primeiro.user_id)?.nome || 'O outro')} achou primeiro, às ${hora(primeiro.achado_em)}. Você achou às ${hora(meu.achado_em)}.`;
-    else if (eu) quem = 'Anotando que você achou…';
+    else if (eu) quem = anotando ? 'Anotando que você achou…' : 'Sem internet para anotar agora. O achado fica guardado e sobe quando a conexão voltar.';
     const placar = placarDoMes();
     const amanha = simboloDeHoje(1);
     return `<div class="ovo-c" role="dialog" aria-modal="true" aria-label="Você achou o símbolo de hoje">
@@ -171,12 +180,14 @@ export async function abrirOvo() {
       <p class="ovo-a">Amanhã o símbolo escondido é <span class="ovo-m">${amanha.svg}</span> <b>${esc(amanha.nome)}</b>.</p>
       <button class="btn small" data-fechar style="align-self:center">Fechar</button></div>`;
   };
+  let anotando = true;
   caixa.innerHTML = corpo();
   const fechar = () => { caixa.remove(); window.removeEventListener('hashchange', fechar); };
   caixa.addEventListener('click', (e) => { if (e.target === caixa || e.target.closest('a,[data-fechar]')) fechar(); });
   window.addEventListener('hashchange', fechar);
   document.body.append(caixa);
   await registrar();
+  anotando = false;
   marcarAchado();
   window.dispatchEvent(new Event('ovo:achado')); // o Perfil atualiza o cartão da caça ao símbolo
   if (caixa.isConnected) caixa.innerHTML = corpo();
@@ -184,5 +195,10 @@ export async function abrirOvo() {
 
 // o símbolo funciona em qualquer tela
 document.addEventListener('click', (e) => {
-  if (e.target.closest('[data-ovo]')) { e.preventDefault(); e.stopPropagation(); abrirOvo(); }
+  const s = e.target.closest('[data-ovo]');
+  if (!s) return;
+  e.preventDefault(); e.stopPropagation();
+  // um símbolo que ficou na tela desde ontem não vale para hoje: o de hoje é outro e está em outro lugar
+  if (s.dataset.ovo !== hoje()) { s.remove(); toast('Esse era o símbolo de ontem. O de hoje está escondido em outro lugar.'); return; }
+  abrirOvo();
 }, true);
