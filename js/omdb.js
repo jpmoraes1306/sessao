@@ -1,5 +1,6 @@
 // OMDb: notas do IMDb, Rotten Tomatoes e Metacritic, mais prêmios e bilheteria.
-// Limite grátis de 1.000 consultas por dia: cada título fica 7 dias no cache.
+// Limite grátis de 1.000 consultas por dia: cada título fica 7 dias no cache; se ainda faltava a nota
+// do IMDb ou do Rotten (filme recém-lançado), só 1 dia, para a nota aparecer assim que existir.
 import { chave } from './config.js';
 import { ler, gravar, DIA } from './cache.js';
 
@@ -10,7 +11,8 @@ export async function notas(imdbId) {
   if (!imdbId || !chave('omdb')) return null;
   const k = `omdb:${imdbId}`;
   const salvo = await ler(k);
-  if (salvo && Date.now() - salvo.t < 7 * DIA) return salvo.v;
+  const completo = salvo?.v && salvo.v.imdb != null && salvo.v.rotten != null;
+  if (salvo && Date.now() - salvo.t < (completo ? 7 : 1) * DIA) return salvo.v;
   if (emCurso.has(k)) return emCurso.get(k);
   const pedido = (async () => {
     try {

@@ -107,15 +107,6 @@ export async function alternarStreaming(nome) {
   return !error;
 }
 
-/** Datas especiais do perfil (tema do dia): [{ dia, mes, nome, pessoa }]. */
-export const datasEspeciais = () => perfil?.datas || [{ dia: 22, mes: 7, nome: 'Dia do Willem Dafoe', pessoa: 5293 }];
-export async function salvarDatas(datas) {
-  if (!perfil || !cliente) return false;
-  perfil.datas = datas;
-  const { error } = await cliente.from('perfis').update({ datas }).eq('id', sessao.user.id);
-  return !error;
-}
-
 export async function sair() {
   if (cliente) await cliente.auth.signOut();
 }

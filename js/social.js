@@ -166,11 +166,14 @@ export function compatibilidade() {
 }
 
 /* ---------- feed ---------- */
-/** Últimas atividades dos dois (nota, visto, review), da mais nova para a mais antiga. */
-export async function feed(limite = 14) {
+/** Últimas atividades (nota, visto, review), da mais nova para a mais antiga. Por padrão só as do outro:
+    as próprias cada um vê no seu Diário. */
+export async function feed(limite = 14, soDoOutro = true) {
   const b = nuvem.usuario() ? nuvem.banco() : null;
   if (!b) return [];
-  const { data, error } = await b.from('avaliacoes').select('user_id, tipo, tmdb_id, visto, nota, curtido, seguindo, review_em, atualizado_em').order('atualizado_em', { ascending: false }).limit(limite);
+  let pedido = b.from('avaliacoes').select('user_id, tipo, tmdb_id, visto, nota, curtido, seguindo, review_em, atualizado_em');
+  if (soDoOutro) pedido = pedido.neq('user_id', nuvem.usuario().id);
+  const { data, error } = await pedido.order('atualizado_em', { ascending: false }).limit(limite);
   if (error) return [];
   const info = await dados.resumos(data);
   return data.map((a) => {

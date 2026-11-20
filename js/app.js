@@ -13,7 +13,6 @@ import * as serie from './telas/serie.js';
 import * as pessoa from './telas/pessoa.js';
 import * as importar from './telas/importar.js';
 import * as calendario from './telas/calendario.js';
-import * as especial from './especial.js';
 import * as dados from './dados.js';
 import * as social from './social.js';
 import { carinha } from './ovo.js';
@@ -127,7 +126,6 @@ let quemEra = null;
 let pronto = false; // vira true depois da primeira tela
 nuvem.aoMudar(() => {
   mostrarLogin();
-  especial.aplicarTema(); // as datas especiais vêm do perfil
   const quemE = nuvem.usuario()?.id || null;
   const trocou = quemE !== quemEra;
   quemEra = quemE;
@@ -149,7 +147,6 @@ const refazerAba = () => { // junta os avisos que chegam em sequência (login, s
 dados.aoSincronizar(() => { social.carregar(); refazerAba(); });
 social.aoCarregar(refazerAba);
 
-especial.aplicarTema();
 await carregarChaves();
 // espera um instante pelo login guardado, para a primeira tela já abrir com os dados da conta;
 // se a internet estiver lenta, abre sem esperar e completa depois

@@ -107,6 +107,17 @@ export function foto(p, cls = '') {
   const [a, b] = corDe(p.nome);
   return `<span class="ph ${cls}" style="--a:${a};--b:${b}">${esc(iniciais(p.nome))}${p.foto ? `<img src="${img(p.foto, 'w185')}" alt="" loading="lazy" decoding="async" crossorigin="anonymous" ${SOME}>` : ''}</span>`;
 }
+/** Elenco sem foto repetida: quem dirige (ou cria) e também atua aparece uma vez só, com os dois cargos. */
+export function elencoJunto(chefes, cargo, elenco, papelDe = (p) => p.papel) {
+  const mapa = new Map();
+  for (const c of chefes) mapa.set(c.id, { ...c, papeis: [cargo] });
+  for (const p of elenco) {
+    const ja = mapa.get(p.id);
+    const papel = papelDe(p);
+    if (ja) { if (papel) ja.papeis.push(papel); } else mapa.set(p.id, { ...p, papeis: papel ? [papel] : [] });
+  }
+  return [...mapa.values()].map((p) => headshot(p, p.papeis.join(' · '))).join('');
+}
 export const headshot = (p, sub) => `<a class="headshot" href="#/pessoa/${p.id}">${foto(p)}<span>${esc(p.nome)}</span>${sub ? `<small>${esc(sub)}</small>` : ''}</a>`;
 
 /* ---------- cartões de título ---------- */
@@ -138,14 +149,23 @@ const BAIXO = '<svg class="vai" viewBox="0 0 24 24" aria-hidden="true"><path d="
 export const SETA = '<svg class="vai" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>';
 /** Notas de outros sites numa linha só (IMDb, Rotten, Metacritic, TMDB). Tocar abre o detalhe. */
 export function blocoNotas(minha, tmdbNota, omdb, carregando) {
-  const itens = [];
-  const mais = [];
-  if (omdb?.imdb) { itens.push(`<span class="nf"><i class="m imdb">IMDb</i>${nota(omdb.imdb)}</span>`); mais.push(`<span><b>IMDb ${nota(omdb.imdb)}</b>${omdb.imdbVotos ? ` · ${Number(omdb.imdbVotos).toLocaleString('pt-BR')} votos` : ''}</span>`); }
-  if (omdb?.rotten != null) { itens.push(`<span class="nf"><i class="m tom"></i>${omdb.rotten}%</span>`); mais.push(`<span><b>Rotten Tomatoes ${omdb.rotten}%</b> · críticas positivas</span>`); }
-  if (omdb?.metacritic) { itens.push(`<span class="nf"><i class="m mc">${omdb.metacritic}</i><small>Meta</small></span>`); mais.push(`<span><b>Metacritic ${omdb.metacritic}</b> · de 0 a 100</span>`); }
-  if (tmdbNota) { itens.push(`<span class="nf"><i class="m tm">TMDB</i>${nota(tmdbNota)}</span>`); mais.push(`<span><b>TMDB ${nota(tmdbNota)}</b> · nota do público</span>`); }
-  if (!itens.length) return carregando ? '<div class="skel txt" style="width:70%"></div>' : '<p class="note">Sem notas de outros sites por enquanto.</p>';
-  return `<details class="notas"><summary aria-label="Notas de outros sites. Toque para ver o detalhe.">${itens.join('')}${carregando ? '<span class="nf dim">…</span>' : ''}${BAIXO}</summary><div class="notas-mais">${mais.join('')}</div></details>`;
+  // os quatro sites aparecem sempre; "—" quando o site ainda não tem nota (comum em filme recém-lançado)
+  const falta = carregando ? '…' : '—';
+  const tem = { imdb: omdb?.imdb > 0, rotten: omdb?.rotten != null, meta: omdb?.metacritic > 0, tmdb: tmdbNota > 0 };
+  const itens = [
+    `<span class="nf${tem.imdb ? '' : ' sem'}"><i class="m imdb">IMDb</i>${tem.imdb ? nota(omdb.imdb) : falta}</span>`,
+    `<span class="nf${tem.rotten ? '' : ' sem'}"><i class="m tom"></i>${tem.rotten ? `${omdb.rotten}%` : falta}</span>`,
+    `<span class="nf${tem.meta ? '' : ' sem'}"><i class="m mc">${tem.meta ? omdb.metacritic : falta}</i><small>Meta</small></span>`,
+    `<span class="nf${tem.tmdb ? '' : ' sem'}"><i class="m tm">TMDB</i>${tem.tmdb ? nota(tmdbNota) : falta}</span>`,
+  ];
+  const sem = carregando ? 'buscando…' : 'ainda sem nota';
+  const mais = [
+    `<span><b>IMDb${tem.imdb ? ` ${nota(omdb.imdb)}` : ''}</b> · ${tem.imdb ? (omdb.imdbVotos ? `${Number(omdb.imdbVotos).toLocaleString('pt-BR')} votos do público` : 'público') : sem}</span>`,
+    `<span><b>Rotten Tomatoes${tem.rotten ? ` ${omdb.rotten}%` : ''}</b> · ${tem.rotten ? 'das críticas são positivas' : sem}</span>`,
+    `<span><b>Metacritic${tem.meta ? ` ${omdb.metacritic}` : ''}</b> · ${tem.meta ? 'média da crítica, de 0 a 100' : sem}</span>`,
+    `<span><b>TMDB${tem.tmdb ? ` ${nota(tmdbNota)}` : ''}</b> · ${tem.tmdb ? 'nota do público' : sem}</span>`,
+  ];
+  return `<details class="notas"><summary aria-label="Notas de outros sites. Toque para ver o detalhe.">${itens.join('')}${BAIXO}</summary><div class="notas-mais">${mais.join('')}</div></details>`;
 }
 
 // Os dados já vêm só do Brasil (JustWatch BR). Aqui saem os "canais" revendidos dentro de outro
@@ -225,4 +245,5 @@ export const IC = {
   relogio: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>',
   lapis: '<svg viewBox="0 0 24 24"><path d="M4 20l4-1L19 8l-3-3L5 16z"/><path d="M14 7l3 3"/></svg>',
   sino: '<svg viewBox="0 0 24 24"><path d="M6 16V11a6 6 0 0 1 12 0v5l2 2H4z"/><path d="M10 20a2 2 0 0 0 4 0"/></svg>',
+  rever: '<svg viewBox="0 0 24 24"><path d="M4.500 11a7.500 7.500 0 0 1 12.800-4.800L20 9"/><path d="M20 4.500V9h-4.500"/><path d="M19.500 13a7.500 7.500 0 0 1-12.800 4.800L4 15"/><path d="M4 19.500V15h4.500"/></svg>',
 };

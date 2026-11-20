@@ -405,6 +405,12 @@ export async function fotoDaPessoa(id) {
 }
 
 /** Confere se a chave funciona (usado na tela do Perfil). */
+/** Código do IMDb de um título (para buscar as notas de fora). Fica 30 dias guardado. */
+export async function imdbDe(tipo, id) {
+  const j = await api(`${tipo === 'serie' ? 'tv' : 'movie'}/${id}/external_ids`, {}, { ttl: 30 * DIA });
+  return j.imdb_id || '';
+}
+
 export async function testarChave(k) {
   const r = await fetch(`${BASE}configuration?api_key=${encodeURIComponent(k)}`);
   return r.ok;
