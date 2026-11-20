@@ -60,6 +60,19 @@ h2 small{font-size:13px;letter-spacing:0;color:var(--muted);font-weight:400;text
 .mark{position:absolute;z-index:3;top:6px;right:6px;width:9px;height:9px;border-radius:50%;background:var(--seen);box-shadow:0 0 0 2px rgba(0,0,0,.55)}
 .tag{display:inline-block;font-size:11px;font-weight:600;color:var(--muted);background:var(--raised);border-radius:5px;padding:1px 6px;line-height:1.5;vertical-align:1px}
 .tile .tag{position:absolute;z-index:3;top:6px;left:6px;background:var(--veu);color:var(--fg)}
+/* conversa embaixo de uma review */
+.coms{display:flex;flex-direction:column;gap:10px;margin-top:12px;padding-top:12px;border-top:1px solid var(--line)}
+.com{padding-left:10px;border-left:2px solid var(--line)}
+.com .who{display:flex;justify-content:space-between;gap:10px;font-size:12.5px;color:var(--muted)}
+.com .who b{color:var(--fg);font-weight:600}
+.com .who .texto{font-size:12.5px;padding:0}
+.com .txt{font-size:14px;white-space:pre-wrap;overflow-wrap:anywhere}
+.com-novo{display:flex;gap:8px;align-items:center}
+.com-campo{flex:1;min-width:0;background:var(--raised);border:0;border-radius:10px;color:var(--fg);font:inherit;font-size:16px;padding:8px 12px}
+.com-campo:focus{outline:2px solid var(--list)}
+.tile-a{display:flex;flex-direction:column;gap:5px;min-width:0;text-decoration:none}
+.sino-e{position:absolute;z-index:4;top:5px;right:5px;width:32px;height:32px;background:var(--veu)}
+.sino-e svg{width:16px;height:16px}
 .leg{font-size:12.5px;color:var(--muted);display:flex;align-items:center;gap:5px;min-width:0;white-space:nowrap}
 .leg .n{overflow:hidden;text-overflow:ellipsis}
 .av{flex:none;width:19px;height:19px;border-radius:50%;display:grid;place-items:center;font-size:10.5px;font-weight:700;font-style:normal;color:var(--sobre);background:var(--list)}
